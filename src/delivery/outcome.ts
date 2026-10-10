@@ -11,8 +11,26 @@ export function trimDetail(detail: JsonValue | undefined, max = 300): string | u
 	return clean === "" ? undefined : clean;
 }
 
-const authPattern = /401|403|oauth|unauthori[sz]ed|invalid.*(token|key)|expired|credential|not logged in|no auth/i;
-const overloadPattern = /429|rate.?limit|overloaded|529|too many requests/i;
+/** Provider error lines start with the HTTP status; numbers elsewhere (token counts, request ids) mean nothing. */
+const overflowPattern = /prompt is too long|context[_ ]length|maximum context|context window|too many (input )?tokens/i;
+const overloadPattern =
+	/^(429|529)\b|\brate_limit_error\b|\boverloaded(_error)?\b|\brate.?limit(ed)?\b|too many requests/i;
+const authPattern = new RegExp(
+	[
+		"^(401|403)\\b",
+		"\\b(authentication_error|permission_error)\\b",
+		"\\bOAuth (refresh|token)\\b",
+		"\\btoken refresh\\b",
+		"\\b(token|credentials?) (has |have )?expired\\b",
+		"\\bunauthori[sz]ed\\b",
+		"\\binvalid[ _-]?x-api-key\\b",
+		"\\bno api key\\b",
+		"\\bnot logged in\\b",
+		"\\bprovider is not configured\\b",
+		"\\bcredential store\\b",
+	].join("|"),
+	"i",
+);
 
 /** The one line a user sees when a request got no answer; undefined when nothing should be said. */
 export function unansweredText(
@@ -37,9 +55,10 @@ export function unansweredText(
 }
 
 function modelErrorText(detail: string, provider: string): string {
+	if (overflowPattern.test(detail)) return "⚠ The conversation is too long for the model: send /compact or /new.";
+	if (overloadPattern.test(detail)) return "⚠ Provider is overloaded or rate-limited, try again later.";
 	if (authPattern.test(detail))
 		return `⚠ Model auth failed: run \`pi-durable-telegram login ${provider}\` on the server.`;
-	if (overloadPattern.test(detail)) return "⚠ Provider is overloaded or rate-limited, try again later.";
 	return `⚠ Model error: ${truncate(detail === "" ? "unknown" : detail, 200)}.`;
 }
 
