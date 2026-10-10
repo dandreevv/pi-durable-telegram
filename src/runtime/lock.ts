@@ -41,7 +41,8 @@ const GARBAGE_GRACE_MS = 10_000;
 /**
  * Take the single-owner lock of a data directory: `owner.lock` created exclusively. A lock whose owner is dead (or
  * whose pid was reused by another process on Linux) is taken over once; a live owner, an owner on another host or
- * of another user means refusal with `LockHeld`.
+ * of another user means refusal with `LockHeld`. Takeovers are serialized by `owner.lock.takeover`, created
+ * exclusively, so two processes judging the same stale lock cannot both end up owning it.
  */
 export function acquireDataDirLock(dir: string, probe: LockProbe = defaultProbe()): DataDirLock {
 	const path = join(dir, "owner.lock");
@@ -51,13 +52,35 @@ export function acquireDataDirLock(dir: string, probe: LockProbe = defaultProbe(
 		startedAt: new Date(probe.now()).toISOString(),
 		...optionalStart(probe.startTime(probe.pid)),
 	};
-	if (!tryCreate(path, owner)) {
-		const reason = takeoverRefusal(path, probe);
-		if (reason !== undefined) throw new LockHeld(readOwner(path), reason);
-		unlinkQuiet(path);
-		if (!tryCreate(path, owner)) throw new LockHeld(readOwner(path), "another process took the lock first");
-	}
+	if (!tryCreate(path, owner)) withTakeoverMarker(path, owner, probe, () => takeOver(path, owner, probe));
 	return { path, release: () => releaseIfOurs(path, probe.pid) };
+}
+
+function claimMarker(marker: string, owner: LockOwner, probe: LockProbe): boolean {
+	if (tryCreate(marker, owner)) return true;
+	// An old marker was left by a process that crashed mid-takeover (a takeover takes microseconds).
+	if (ageMs(marker, probe) <= GARBAGE_GRACE_MS) return false;
+	unlinkQuiet(marker);
+	return tryCreate(marker, owner);
+}
+
+/** Under the takeover marker: judge the current owner again, then replace a stale lock. */
+function takeOver(path: string, owner: LockOwner, probe: LockProbe): void {
+	const reason = takeoverRefusal(path, probe);
+	if (reason !== undefined) throw new LockHeld(readOwner(path), reason);
+	unlinkQuiet(path);
+	if (!tryCreate(path, owner)) throw new LockHeld(readOwner(path), "another process took the lock first");
+}
+
+function withTakeoverMarker(path: string, owner: LockOwner, probe: LockProbe, work: () => void): void {
+	const marker = `${path}.takeover`;
+	if (!claimMarker(marker, owner, probe))
+		throw new LockHeld(readOwner(path), "another process is taking over the DATA_DIR lock");
+	try {
+		work();
+	} finally {
+		unlinkQuiet(marker);
+	}
 }
 
 function optionalStart(startTime: string | undefined): { startTime?: string } {
@@ -95,18 +118,28 @@ function takeoverRefusal(path: string, probe: LockProbe): string | undefined {
 	if (owner === undefined) return garbageRefusal(path, probe);
 	if (owner.host !== probe.host) return `DATA_DIR is locked by pid ${owner.pid} on host ${owner.host}`;
 	const alive = isAlive(owner.pid, probe);
+	if (alive === "dead" || pidReused(owner, probe)) return undefined;
 	if (alive === "other_user") return `DATA_DIR is used by pid ${owner.pid} of another user (since ${owner.startedAt})`;
-	if (alive === "dead") return undefined;
-	if (owner.startTime !== undefined && probe.startTime(owner.pid) !== owner.startTime) return undefined;
 	return `DATA_DIR is used by pid ${owner.pid} (since ${owner.startedAt})`;
 }
 
+/** The pid now belongs to a process with another start time (Linux `/proc/<pid>/stat` is readable for any user). */
+function pidReused(owner: LockOwner, probe: LockProbe): boolean {
+	if (owner.startTime === undefined) return false;
+	const current = probe.startTime(owner.pid);
+	return current !== undefined && current !== owner.startTime;
+}
+
 function garbageRefusal(path: string, probe: LockProbe): string | undefined {
+	return ageMs(path, probe) > GARBAGE_GRACE_MS ? undefined : "DATA_DIR lock file is being written by another process";
+}
+
+/** Age of a file by mtime; infinite when it is gone. */
+function ageMs(path: string, probe: LockProbe): number {
 	try {
-		const age = probe.now() - statSync(path).mtimeMs;
-		return age > GARBAGE_GRACE_MS ? undefined : "DATA_DIR lock file is being written by another process";
+		return probe.now() - statSync(path).mtimeMs;
 	} catch {
-		return undefined;
+		return Number.POSITIVE_INFINITY;
 	}
 }
 
