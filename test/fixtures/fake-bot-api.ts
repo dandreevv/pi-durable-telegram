@@ -13,6 +13,8 @@ export class FakeBotApi {
 	confirmed = 0;
 	failGetMe: number | undefined;
 	failGetUpdates: number | undefined;
+	/** Files served by `getFile` and the file download route, by file id. */
+	readonly files = new Map<string, Uint8Array>();
 	#updates: Update[] = [];
 	#nextMessageId = 500;
 	#server: Server | undefined;
@@ -48,6 +50,8 @@ export class FakeBotApi {
 	}
 
 	async #handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+		const file = /^\/file\/bot[^/]+\/files\/(.+)$/.exec(req.url ?? "")?.[1];
+		if (file !== undefined) return this.#download(decodeURIComponent(file), res);
 		const method = /\/bot[^/]+\/([A-Za-z]+)/.exec(req.url ?? "")?.[1] ?? "";
 		const body = await readBody(req);
 		this.calls.push({ method, body });
@@ -67,6 +71,8 @@ export class FakeBotApi {
 				return this.#send(body);
 			case "editMessageText":
 				return this.#edit(body);
+			case "getFile":
+				return this.#getFile(body);
 			default:
 				return ok(true);
 		}
@@ -97,6 +103,19 @@ export class FakeBotApi {
 		const ready = this.#updates.filter((u) => u.update_id >= offset || isForced(u));
 		this.#updates = this.#updates.filter((u) => u.update_id >= offset).map((u) => strip(u));
 		return ready.map((u) => strip(u));
+	}
+
+	#getFile(body: Record<string, unknown>): unknown {
+		const id = String(body.file_id);
+		const bytes = this.files.get(id);
+		if (bytes === undefined) return { ok: false, error_code: 400, description: "Bad Request: invalid file_id" };
+		return ok({ file_id: id, file_unique_id: id, file_size: bytes.length, file_path: `files/${id}` });
+	}
+
+	#download(id: string, res: ServerResponse): void {
+		const bytes = this.files.get(id);
+		res.writeHead(bytes === undefined ? 404 : 200);
+		res.end(bytes === undefined ? "not found" : Buffer.from(bytes));
 	}
 
 	#send(body: Record<string, unknown>): unknown {

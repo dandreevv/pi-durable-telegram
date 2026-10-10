@@ -55,7 +55,10 @@ export interface TelegramChannel {
 	 * `harness.resume()` and starts long polling. Resolves once polling runs. Nothing else may start the scheduler first.
 	 */
 	start(harness: Harness, context: Context, options?: { readonly polling?: boolean }): Promise<void>;
-	/** Stop polling (the offset is confirmed) and drain in-flight handlers. Does not close the harness. */
+	/**
+	 * Drain in-flight handlers, then stop polling and confirm the handled updates. An update whose handler did not
+	 * finish, or that arrived during shutdown, stays unconfirmed so Telegram redelivers it. Does not close the harness.
+	 */
 	stop(): Promise<void>;
 	/** Handle one update from another source (a webhook, tests). Requires `start()`. */
 	handleUpdate(update: Update): Promise<void>;
@@ -148,6 +151,12 @@ class Lifecycle {
 	#rt: ChannelRuntime | undefined;
 	#polling: Promise<void> | undefined;
 	#stopping = false;
+	/** A polling update's handler is running. */
+	#pollingBusy = false;
+	/** An update arrived after stop() began; grammY's loop is parked on it. */
+	#parked = false;
+	/** grammY's loop waits on a handler that never settles; it issues no further getUpdates. */
+	#frozen = false;
 
 	constructor(deps: LifecycleDeps) {
 		this.#d = deps;
@@ -191,7 +200,7 @@ class Lifecycle {
 
 	#startPolling(rt: ChannelRuntime): Promise<void> {
 		const { bot, log } = this.#d;
-		bot.use((ctx) => this.handle(ctx.update));
+		bot.use((ctx) => this.#fromPolling(ctx.update));
 		bot.catch((error) =>
 			log.error("bot_error", { update_id: error.ctx.update.update_id, ...telegramErrorSummary(error.error) }),
 		);
@@ -222,6 +231,29 @@ class Lifecycle {
 		return work;
 	}
 
+	/**
+	 * grammY marks an update as tried before running its handler and confirms it on `bot.stop()`. During shutdown an
+	 * arriving update is parked (its handler never settles, so the loop stops on it) and left unconfirmed for the next
+	 * process; a handler still running is waited for and, if it does not finish, left unconfirmed too.
+	 */
+	#fromPolling(update: Update): Promise<void> {
+		if (this.#stopping) {
+			this.#parked = true;
+			return this.#freeze();
+		}
+		this.#pollingBusy = true;
+		const work = this.handle(update).finally(() => {
+			this.#pollingBusy = false;
+		});
+		// Once stopping, the loop must not move on: its next getUpdates would confirm what it just tried.
+		return work.then(() => (this.#stopping ? this.#freeze() : undefined));
+	}
+
+	#freeze(): Promise<void> {
+		this.#frozen = true;
+		return new Promise<void>(() => {});
+	}
+
 	#track(work: Promise<unknown>): void {
 		const settled = work.catch(() => undefined);
 		this.#tracked.add(settled);
@@ -230,13 +262,24 @@ class Lifecycle {
 
 	async stop(): Promise<void> {
 		this.#stopping = true;
+		await withTimeout(Promise.allSettled([...this.#tracked]), DRAIN_MS);
+		// Checked synchronously right before bot.stop() computes its offset: no update can slip in between.
+		if (this.#pollingBusy || this.#parked) {
+			this.#d.log.warn("polling_left_unconfirmed", {
+				reason: this.#parked ? "update during shutdown" : "handler running",
+			});
+			return;
+		}
+		await this.#stopPolling();
+	}
+
+	async #stopPolling(): Promise<void> {
 		const { bot, log } = this.#d;
 		if (bot.isRunning())
 			await withTimeout(bot.stop(), DRAIN_MS).catch((error: unknown) =>
 				log.warn("polling_stop_failed", { error: errorSummary(error) }),
 			);
-		await withTimeout(this.#polling ?? Promise.resolve(), DRAIN_MS);
-		await withTimeout(Promise.allSettled([...this.#tracked]), DRAIN_MS);
+		if (!this.#frozen) await withTimeout(this.#polling ?? Promise.resolve(), DRAIN_MS);
 	}
 }
 

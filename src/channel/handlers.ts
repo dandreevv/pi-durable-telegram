@@ -68,7 +68,8 @@ async function dispatch(scope: MessageScope): Promise<void> {
 		case "command":
 			return runCommand(scope, classified.name, classified.args);
 		case "text":
-			return admitContent(scope, classified.text);
+			await admitContent(scope, classified.text);
+			return;
 		case "photo":
 		case "document":
 			return handleAttachment(scope);
@@ -97,7 +98,8 @@ async function runCommand(scope: MessageScope, name: string, args: string): Prom
 			return detach(scope, "compact", () => runCompact(scope, args));
 		default:
 			// Unknown commands go to the model as text: skills and prompts often use their own slash words.
-			return admitContent(scope, scope.message.text ?? `/${name}`);
+			await admitContent(scope, scope.message.text ?? `/${name}`);
+			return;
 	}
 }
 
@@ -111,13 +113,15 @@ function detach(scope: MessageScope, name: string, work: () => Promise<void>): v
 	);
 }
 
-async function admitContent(scope: MessageScope, content: string): Promise<void> {
+/** Admit the message for a model run; true when this call admitted it (false: a duplicate). */
+async function admitContent(scope: MessageScope, content: string): Promise<boolean> {
 	const input = { chatId: scope.chatId, messageId: scope.messageId, requestId: scope.key, content };
 	const result = await admit(scope.conversation, scope.rt.deliver, input, BG);
 	scope.rt.log.info(result === "admitted" ? "message_admitted" : "update_duplicate", {
 		chat: scope.chatId,
 		message: scope.messageId,
 	});
+	return result === "admitted";
 }
 
 /** Record the key, then reply once: a crash in between loses the reply rather than repeating it. */
@@ -171,9 +175,10 @@ async function handleVoice(scope: MessageScope): Promise<void> {
 	const transcript = await transcribe(scope, stt, voice.fileId, voice.mime);
 	if (transcript === undefined) return;
 	if (transcript.text === "") return replyOnce(scope, "Could not recognize speech.");
-	await reply(scope, `🎙 ${truncate(transcript.text, 4000)}`);
 	const lang = transcript.language === undefined ? "" : `, lang=${transcript.language}`;
-	await admitContent(scope, `[voice transcript${lang}] ${transcript.text}`);
+	// Echo only once admitted: a redelivered voice message (shutdown or crash before admit) is not echoed twice.
+	if (await admitContent(scope, `[voice transcript${lang}] ${transcript.text}`))
+		await reply(scope, `🎙 ${truncate(transcript.text, 4000)}`);
 }
 
 async function transcribe(scope: MessageScope, stt: Stt, fileId: string, mime: string) {
