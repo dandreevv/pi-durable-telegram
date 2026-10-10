@@ -17,6 +17,7 @@ import { runStatus } from "./commands/status.ts";
 import { runStop } from "./commands/stop.ts";
 import { messageKey } from "./docs.ts";
 import { admit, isKnown, recordKey } from "./intake.ts";
+import { forwardMarker } from "./provenance.ts";
 import { type ChannelRuntime, type MessageScope, reply } from "./scope.ts";
 
 const MB = 1024 * 1024;
@@ -66,7 +67,10 @@ async function dispatch(scope: MessageScope): Promise<void> {
 	const classified = classifyMessage(scope.message);
 	switch (classified.kind) {
 		case "command":
-			return runCommand(scope, classified.name, classified.args);
+			// A forwarded "/new" is someone else's text, not the user's command.
+			if (forwardMarker(scope.message) === undefined) return runCommand(scope, classified.name, classified.args);
+			await admitContent(scope, scope.message.text ?? "");
+			return;
 		case "text":
 			await admitContent(scope, classified.text);
 			return;
@@ -114,7 +118,9 @@ function detach(scope: MessageScope, name: string, work: () => Promise<void>): v
 }
 
 /** Admit the message for a model run; true when this call admitted it (false: a duplicate). */
-async function admitContent(scope: MessageScope, content: string): Promise<boolean> {
+async function admitContent(scope: MessageScope, text: string): Promise<boolean> {
+	const marker = forwardMarker(scope.message);
+	const content = marker === undefined ? text : `${marker}\n${text}`;
 	const input = { chatId: scope.chatId, messageId: scope.messageId, requestId: scope.key, content };
 	const result = await admit(scope.conversation, scope.rt.deliver, input, BG);
 	scope.rt.log.info(result === "admitted" ? "message_admitted" : "update_duplicate", {
