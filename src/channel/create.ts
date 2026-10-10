@@ -1,0 +1,247 @@
+import type { Context } from "@earendil-works/chord";
+import type { Models, ModelThinkingLevel } from "@earendil-works/pi-ai";
+import type { Extension, Harness, ModelRef } from "@earendil-works/pi-durable";
+import { Bot, GrammyError } from "grammy";
+import type { Update } from "grammy/types";
+import { createCompactReportTask } from "../delivery/compact-report.ts";
+import { createDeliverTask } from "../delivery/task.ts";
+import type { DeliveryDeps } from "../delivery/types.ts";
+import type { Stt } from "../media/stt.ts";
+import type { FatalHandler } from "../runtime/fatal.ts";
+import { createLogger, errorSummary, type Logger } from "../runtime/log.ts";
+import { packageVersion } from "../runtime/version.ts";
+import { DOWNLOAD_LIMIT_BYTES } from "../telegram/download.ts";
+import { telegramErrorSummary } from "../telegram/errors.ts";
+import { createGrammyPort } from "../telegram/grammy-port.ts";
+import type { TelegramPort } from "../telegram/port.ts";
+import { createRetryTransformer } from "../telegram/retry.ts";
+import { COMMANDS } from "./commands/list.ts";
+import { ConversationDirectory } from "./conversations.ts";
+import { createTelegramExtension } from "./extension.ts";
+import { handleUpdate } from "./handlers.ts";
+import type { ChannelRuntime } from "./scope.ts";
+
+export type TelegramChannelOptions = {
+	readonly botToken: string;
+	/** Telegram user ids allowed to talk to the agent; must not be empty. */
+	readonly allowedUserIds: readonly number[];
+	/** The agent's working directory; attachments go to `<workdir>/inbox/`. */
+	readonly workdir: string;
+	readonly model: ModelRef;
+	readonly thinkingLevel: ModelThinkingLevel;
+	/** Speech to text for voice messages; without it voice gets a "not configured" reply. */
+	readonly stt?: Stt;
+	/** Bot API root; default https://api.telegram.org. */
+	readonly apiRoot?: string;
+	readonly log?: Logger;
+	readonly limits?: { readonly downloadBytes?: number; readonly uploadBytes?: number };
+	/** Used by /status for the context window and auth state. */
+	readonly models?: Models;
+	/** Replace the grammY transport (tests, proxies). Polling still uses grammY with `botToken`. */
+	readonly port?: TelegramPort;
+	/** The service cannot continue (poisoned storage, bad token, another poller). Default: log and exit. */
+	readonly onFatal?: FatalHandler;
+	/** Minimum pause between preview edits (default 1000 ms). */
+	readonly previewIntervalMs?: number;
+};
+
+export interface TelegramChannel {
+	/** Install in the registry before `Harness.open`: tasks `tg.deliver`, `tg.compact-report`; tool `telegram_send_file`. */
+	readonly extension: Extension;
+	/**
+	 * After `Harness.open`: applies the configured agent to existing chats, registers commands, calls
+	 * `harness.resume()` and starts long polling. Resolves once polling runs. Nothing else may start the scheduler first.
+	 */
+	start(harness: Harness, context: Context, options?: { readonly polling?: boolean }): Promise<void>;
+	/** Stop polling (the offset is confirmed) and drain in-flight handlers. Does not close the harness. */
+	stop(): Promise<void>;
+	/** Handle one update from another source (a webhook, tests). Requires `start()`. */
+	handleUpdate(update: Update): Promise<void>;
+}
+
+/** Exit code and message for errors that stop polling for good. */
+export class PollingError extends Error {
+	readonly exitCode: number;
+	constructor(message: string, exitCode: number) {
+		super(message);
+		this.name = "PollingError";
+		this.exitCode = exitCode;
+	}
+}
+
+export function pollingFailure(error: unknown): PollingError {
+	if (error instanceof GrammyError && error.error_code === 401)
+		return new PollingError("Telegram rejected the bot token (401)", 2);
+	if (error instanceof GrammyError && error.error_code === 409) {
+		return new PollingError("Another process polls this bot token (409 Conflict)", 1);
+	}
+	return new PollingError(`Telegram polling failed: ${errorSummary(error)}`, 1);
+}
+
+const defaultFatal =
+	(log: Logger): FatalHandler =>
+	(reason, error, exitCode) => {
+		log.error("fatal", { reason, error: error === undefined ? undefined : errorSummary(error) });
+		process.exit(exitCode ?? 1);
+	};
+
+/** Create the Telegram channel for a pi-durable app. See `TelegramChannel` for the two-step lifecycle. */
+export function createTelegramChannel(options: TelegramChannelOptions): TelegramChannel {
+	if (options.allowedUserIds.length === 0) throw new Error("allowedUserIds must not be empty");
+	const log = options.log ?? createLogger();
+	const onFatal = options.onFatal ?? defaultFatal(log);
+	const apiRoot = options.apiRoot ?? "https://api.telegram.org";
+	const bot = new Bot(options.botToken, { client: { apiRoot, timeoutSeconds: 75 } });
+	bot.api.config.use(createRetryTransformer());
+	const port = options.port ?? createGrammyPort({ token: options.botToken, apiRoot, api: bot.api });
+	let harness: Harness | undefined;
+	const deps: DeliveryDeps = {
+		port: () => port,
+		harness: () => {
+			if (harness === undefined) throw new Error("Telegram channel used before start()");
+			return harness;
+		},
+		log,
+		model: options.model,
+		onFatal,
+		...(options.previewIntervalMs === undefined ? {} : { previewIntervalMs: options.previewIntervalMs }),
+	};
+	const deliver = createDeliverTask(deps);
+	const compactReport = createCompactReportTask(deps);
+	const extension = createTelegramExtension({
+		deliver,
+		compactReport,
+		port: () => port,
+		log,
+		...(options.limits?.uploadBytes === undefined ? {} : { uploadLimit: options.limits.uploadBytes }),
+	});
+	const lifecycle = new Lifecycle({ options, log, onFatal, bot, port, deliver, compactReport });
+	return {
+		extension,
+		start: async (opened, context, startOptions) => {
+			harness = opened;
+			await lifecycle.start(opened, context, startOptions?.polling ?? true);
+		},
+		stop: () => lifecycle.stop(),
+		handleUpdate: (update) => lifecycle.handle(update),
+	};
+}
+
+type LifecycleDeps = {
+	options: TelegramChannelOptions;
+	log: Logger;
+	onFatal: FatalHandler;
+	bot: Bot;
+	port: TelegramPort;
+	deliver: ChannelRuntime["deliver"];
+	compactReport: ChannelRuntime["compactReport"];
+};
+
+const DRAIN_MS = 5000;
+
+class Lifecycle {
+	readonly #d: LifecycleDeps;
+	readonly #tracked = new Set<Promise<unknown>>();
+	#rt: ChannelRuntime | undefined;
+	#polling: Promise<void> | undefined;
+	#stopping = false;
+
+	constructor(deps: LifecycleDeps) {
+		this.#d = deps;
+	}
+
+	async start(harness: Harness, context: Context, polling: boolean): Promise<void> {
+		const rt = this.#runtime(harness);
+		this.#rt = rt;
+		const changed = await rt.directory.reconfigureAll(context);
+		if (changed > 0) this.#d.log.info("chats_reconfigured", { count: changed });
+		await this.#d.port.setMyCommands(COMMANDS).catch((error: unknown) => {
+			this.#d.log.warn("set_commands_failed", telegramErrorSummary(error));
+		});
+		harness.resume();
+		if (polling) await this.#startPolling(rt);
+	}
+
+	#runtime(harness: Harness): ChannelRuntime {
+		const { options, log, port } = this.#d;
+		const defaults = { model: options.model, thinkingLevel: options.thinkingLevel, cwd: options.workdir };
+		return {
+			harness,
+			directory: new ConversationDirectory(harness, defaults),
+			port,
+			log,
+			allowed: new Set(options.allowedUserIds),
+			workdir: options.workdir,
+			stt: options.stt,
+			models: options.models,
+			model: options.model,
+			downloadLimit: options.limits?.downloadBytes ?? DOWNLOAD_LIMIT_BYTES,
+			deliver: this.#d.deliver,
+			compactReport: this.#d.compactReport,
+			startedAt: Date.now(),
+			version: packageVersion(),
+			track: (work) => this.#track(work),
+			onFatal: this.#d.onFatal,
+			now: () => new Date(),
+		};
+	}
+
+	#startPolling(rt: ChannelRuntime): Promise<void> {
+		const { bot, log } = this.#d;
+		bot.use((ctx) => this.handle(ctx.update));
+		bot.catch((error) =>
+			log.error("bot_error", { update_id: error.ctx.update.update_id, ...telegramErrorSummary(error.error) }),
+		);
+		return new Promise<void>((resolve, reject) => {
+			let started = false;
+			this.#polling = bot
+				.start({
+					allowed_updates: ["message"],
+					onStart: (info) => {
+						started = true;
+						log.info("polling_started", { bot: info.username, allowed_users: rt.allowed.size });
+						resolve();
+					},
+				})
+				.catch((error: unknown) => {
+					const failure = pollingFailure(error);
+					if (!started) reject(failure);
+					else if (!this.#stopping) this.#d.onFatal(failure.message, undefined, failure.exitCode);
+				});
+		});
+	}
+
+	handle(update: Update): Promise<void> {
+		const rt = this.#rt;
+		if (rt === undefined || this.#stopping) return Promise.resolve();
+		const work = handleUpdate(rt, update);
+		this.#track(work);
+		return work;
+	}
+
+	#track(work: Promise<unknown>): void {
+		const settled = work.catch(() => undefined);
+		this.#tracked.add(settled);
+		void settled.finally(() => this.#tracked.delete(settled));
+	}
+
+	async stop(): Promise<void> {
+		this.#stopping = true;
+		const { bot, log } = this.#d;
+		if (bot.isRunning())
+			await withTimeout(bot.stop(), DRAIN_MS).catch((error: unknown) =>
+				log.warn("polling_stop_failed", { error: errorSummary(error) }),
+			);
+		await withTimeout(this.#polling ?? Promise.resolve(), DRAIN_MS);
+		await withTimeout(Promise.allSettled([...this.#tracked]), DRAIN_MS);
+	}
+}
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | undefined> {
+	let timer: NodeJS.Timeout | undefined;
+	const timeout = new Promise<undefined>((resolve) => {
+		timer = setTimeout(() => resolve(undefined), ms);
+		timer.unref();
+	});
+	return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
+}
