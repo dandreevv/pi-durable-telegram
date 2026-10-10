@@ -1,0 +1,66 @@
+{
+  "name": "pi-durable-telegram",
+  "version": "0.1.0",
+  "description": "Telegram channel for pi-durable: a durable personal coding agent you talk to in Telegram",
+  "license": "MIT",
+  "author": "smixs",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smixs/pi-durable-telegram.git"
+  },
+  "keywords": [
+    "pi-durable",
+    "telegram",
+    "agent",
+    "grammy",
+    "durable"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "bin": {
+    "pi-durable-telegram": "dist/cli/main.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "deploy"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.ts\"",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@earendil-works/chord": "1.1.0",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-durable": "1.1.0",
+    "grammy": "1.46.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "24.19.2",
+    "fast-check": "4.10.2",
+    "typescript": "7.0.2"
+  },
+  "overrides": {
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/chord": "1.1.0"
+  }
+}
