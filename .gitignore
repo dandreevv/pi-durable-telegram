@@ -3,8 +3,7 @@ dist/
 data/
 coverage/
 .notes/
-.env
-.env.*
+.env*
 *.sqlite
 *.sqlite-*
 *.log
