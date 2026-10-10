@@ -1,4 +1,3 @@
-import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createModels } from "@earendil-works/pi-ai";
 import { AUTH_FILE } from "../agent/open.ts";
@@ -7,6 +6,7 @@ import { FileCredentialStore } from "../auth/credential-store.ts";
 import { createHeadlessInteraction } from "../auth/interaction.ts";
 import { dataDirFromEnv } from "../config/schema.ts";
 import { errorSummary } from "../runtime/log.ts";
+import { ensurePrivateDir } from "../runtime/private-dir.ts";
 
 /**
  * `login <provider>`: OAuth when the provider offers it (Anthropic: Claude Pro/Max with the headless copy-code flow),
@@ -20,7 +20,7 @@ export async function runLogin(provider: string, env: NodeJS.ProcessEnv = proces
 		process.stderr.write(`Unknown provider: ${provider}\n`);
 		return 2;
 	}
-	await mkdir(dataDir, { recursive: true, mode: 0o700 });
+	await ensurePrivateDir(dataDir);
 	const path = join(dataDir, AUTH_FILE);
 	const models = createModels({ credentials: new FileCredentialStore(path) });
 	models.setProvider(providerImpl);

@@ -1,4 +1,3 @@
-import { mkdir } from "node:fs/promises";
 import { BACKGROUND_CONTEXT as BG } from "@earendil-works/chord/context";
 import { StartupError } from "../agent/models.ts";
 import { type Agent, type OpenAgentDeps, openAgent } from "../agent/open.ts";
@@ -6,6 +5,7 @@ import { PollingError } from "../channel/create.ts";
 import type { Config } from "../config/schema.ts";
 import { acquireDataDirLock, type DataDirLock, LockHeld } from "../runtime/lock.ts";
 import { errorSummary, type Logger } from "../runtime/log.ts";
+import { ensurePrivateDir } from "../runtime/private-dir.ts";
 import { createShutdownController } from "../runtime/signals.ts";
 
 export type DaemonDeps = Omit<OpenAgentDeps, "onFatal" | "log"> & {
@@ -20,7 +20,7 @@ export type DaemonDeps = Omit<OpenAgentDeps, "onFatal" | "log"> & {
 export async function runDaemon(config: Config, deps: DaemonDeps): Promise<void> {
 	const { log } = deps;
 	const exit = deps.exit ?? ((code: number) => process.exit(code));
-	await mkdir(config.dataDir, { recursive: true, mode: 0o700 });
+	await ensurePrivateDir(config.dataDir);
 	const lock = takeLock(config.dataDir, log);
 	if (lock === undefined) return exit(3);
 	let agent: Agent | undefined;

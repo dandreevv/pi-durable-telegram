@@ -1,4 +1,3 @@
-import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT as BG } from "@earendil-works/chord/context";
 import type { AuthContext, MutableModels } from "@earendil-works/pi-ai";
@@ -12,6 +11,7 @@ import { createDeepgramStt } from "../media/deepgram.ts";
 import type { Stt } from "../media/stt.ts";
 import type { FatalHandler } from "../runtime/fatal.ts";
 import { errorSummary, type Logger, silentLogger } from "../runtime/log.ts";
+import { ensurePrivateDir, makePrivate } from "../runtime/private-dir.ts";
 import type { TelegramPort } from "../telegram/port.ts";
 import { createEmptyAnswerExtension } from "./empty-answer.ts";
 import { createAgentModels, resolveModel, StartupError } from "./models.ts";
@@ -52,7 +52,7 @@ export const AUTH_FILE = "auth.json";
  */
 export async function openAgent(config: Config, deps: OpenAgentDeps = {}): Promise<Agent> {
 	const log = deps.log ?? silentLogger;
-	await mkdir(config.dataDir, { recursive: true, mode: 0o700 });
+	await ensurePrivateDir(config.dataDir);
 	const models = deps.models ?? (await defaultModels(config, deps.authContext));
 	const ref = { provider: config.provider, modelId: config.modelId };
 	const model = resolveModel(models, ref, config.thinkingLevel);
@@ -82,7 +82,9 @@ export async function openAgent(config: Config, deps: OpenAgentDeps = {}): Promi
 	registry.install(createPromptExtension({ instructionsPath: config.instructionsPath }));
 	registry.install(createEmptyAnswerExtension());
 	registry.install(channel.extension);
-	const storage = await openNodeSqliteStorage(join(config.dataDir, DATABASE_FILE));
+	const database = join(config.dataDir, DATABASE_FILE);
+	const storage = await openNodeSqliteStorage(database);
+	await makePrivate([database, `${database}-wal`, `${database}-shm`]);
 	const harness = await Harness.open(
 		storage,
 		{

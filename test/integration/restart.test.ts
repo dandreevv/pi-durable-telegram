@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { chmod, mkdir, stat } from "node:fs/promises";
+import { join } from "node:path";
 import { test } from "node:test";
 import { BACKGROUND_CONTEXT as BG } from "@earendil-works/chord/context";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai";
@@ -115,6 +117,24 @@ test("T-inflight-unknown: a chunk send in flight at close is skipped after reope
 				assert.equal(texts.filter((text) => text === chunk?.html).length, 1);
 		} finally {
 			await second.close();
+		}
+	} finally {
+		await cleanup();
+	}
+});
+
+test("T-data-perms: an existing world-readable data directory is tightened; the database is private", async () => {
+	const { dir, cleanup } = await tempDir();
+	try {
+		const data = join(dir, "data");
+		await mkdir(data, { mode: 0o755 });
+		await chmod(data, 0o755);
+		const t = await startTestAgent({ dir, faux: newFaux(), port: new FakeTelegram() });
+		try {
+			assert.equal((await stat(data)).mode & 0o777, 0o700);
+			assert.equal((await stat(join(data, "durable.sqlite"))).mode & 0o077, 0, "no group or other access");
+		} finally {
+			await t.close();
 		}
 	} finally {
 		await cleanup();

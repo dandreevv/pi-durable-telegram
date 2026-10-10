@@ -128,7 +128,8 @@ and reach the network. The allow-list of Telegram user ids is the only boundary.
 - Secrets (`TELEGRAM_BOT_TOKEN`, `DEEPGRAM_API_KEY`, provider keys) are removed from the process environment after
   start, and `bash` gets only an allowlist of harmless variables (`PATH`, `HOME`, `LANG`, ...).
 - Logs never contain message text, file URLs, tokens or credentials.
-- The data directory is created with mode 700, `auth.json` with mode 600.
+- The data directory is created (or tightened, if it already exists) with mode 700 at every start; `auth.json` and
+  the SQLite database get mode 600.
 - If that matters for you, run the service under a dedicated user that owns only the project directory.
 
 ## Use as a library
