@@ -76,7 +76,7 @@ variables win over the file). Invalid values stop the daemon at start with one l
 | `PI_WORKDIR` | no | current directory | The agent's working directory |
 | `PI_DATA_DIR` | no | `$XDG_STATE_HOME/pi-durable-telegram` or `~/.local/state/pi-durable-telegram` | SQLite storage, credentials, lock |
 | `PI_INSTRUCTIONS` | no | `<PI_WORKDIR>/AGENTS.md` | Project instructions added to the system prompt; re-read when the file changes |
-| `PI_CONTEXT_CAP` | no | model window | Compact the context once it grows past this many tokens |
+| `PI_CONTEXT_CAP` | no | model window | Compact the context once it grows past this many tokens (in the background from three quarters of it) |
 | `DEEPGRAM_API_KEY` | no | | Enables voice transcription |
 | `TELEGRAM_API_ROOT` | no | `https://api.telegram.org` | Bot API server (for a local Bot API server) |
 | `PI_LOG_LEVEL` | no | `info` | `debug`, `info`, `warn` or `error` |
