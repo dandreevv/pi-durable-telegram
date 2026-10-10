@@ -12,6 +12,7 @@ First release.
 - Streaming by editing one message (about one edit per second, 429-aware), Markdown to Telegram HTML with a plain-text
   fallback, splitting at 4096 characters.
 - Messages during a run are queued and answered in order; `/new`, `/stop`, `/compact`, `/status`, `/help`.
+- Forwarded messages reach the model marked as third-party content; a forwarded command is not run.
 - Photos and documents saved to `<workdir>/inbox/`, images viewable by the model through `read`; `telegram_send_file`
   tool; voice, audio and video notes transcribed with Deepgram (optional).
 - Workspace tools: `read` (with images), `write`, `edit`, `bash` without the service's secrets in its environment.
