@@ -159,3 +159,35 @@ test("/compact replies at once and reports the outcome later", async () => {
 	assert.equal(replies[0], "Compacting…");
 	assert.match(replies[1] ?? "", /^(Compacted\.|Nothing to compact\.)$/);
 });
+
+test("/compact redelivered while the first copy runs starts one compaction", async () => {
+	const faux = newFaux();
+	faux.setResponses([
+		fauxAssistantMessage("a1"),
+		fauxAssistantMessage("a2"),
+		fauxAssistantMessage("summary of the chat"),
+		fauxAssistantMessage("second summary"),
+	]);
+	const { t, port } = await setup(faux);
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 1, "one"));
+	await waitFor(() => port.textsIn(CHAT).includes("a1"));
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 2, "two"));
+	await waitFor(() => port.textsIn(CHAT).includes("a2"));
+	const update = textUpdate(CHAT, 4, "/compact");
+	await Promise.all([t.agent.channel.handleUpdate(update), t.agent.channel.handleUpdate(update)]);
+	await waitFor(() => port.created(CHAT).filter((m) => m.replyTo === 4).length >= 2, { what: "report" });
+	await sleep(300);
+	const reports = await t.agent.harness.commit((tx) => tx.scanTasks({ kind: "tg.compact-report" }, 100), BG);
+	assert.equal(reports.items.length, 1);
+	const all = await t.agent.harness.commit((tx) => tx.scanTasks({}, 100), BG);
+	const compactions = all.items.filter((task) => /compact/i.test(task.kind) && task.kind !== "tg.compact-report");
+	assert.equal(compactions.length, 1, `tasks: ${all.items.map((task) => task.kind).join(",")}`);
+	assert.deepEqual(
+		port
+			.created(CHAT)
+			.filter((m) => m.replyTo === 4)
+			.map((m) => m.text)
+			.slice(0, 1),
+		["Compacting…"],
+	);
+});
