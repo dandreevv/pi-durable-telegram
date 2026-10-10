@@ -25,6 +25,8 @@ type Next = NextTaskState<DeliverState, null>;
 type Task = RunningTask<DeliverInput, SendState, null>;
 
 const MAX_RATE_LIMIT_WAITS = 5;
+/** Pauses between attempts of the final preview edit while Telegram is unreachable; then a new message is sent. */
+export const EDIT_RETRY_DELAYS_MS: readonly number[] = [2000, 4000, 8000, 16000, 30000];
 export const STOPPED_TEXT = "⏹ stopped";
 export const SHARED_TEXT = "↑ answered above";
 export const EMPTY_TEXT = "(empty answer)";
@@ -65,12 +67,13 @@ function plainChunk(text: string): Chunk {
 }
 
 type Sent = { kind: "sent"; messageId: number } | { kind: "unknown" } | { kind: "failed" } | { kind: "gone" };
+type Edited = Sent | { kind: "unavailable" };
 
 async function deliverChunk(job: Job, index: number, chunk: Chunk, state: SendState): Promise<SendState> {
 	const preview = state.preview;
 	if (index === 0 && preview !== undefined) {
-		const edited = await withRateLimit(job, () => editPreview(job, preview.messageId, chunk));
-		if (edited.kind !== "gone") return record(job, state, index, edited);
+		const edited = await editWithRetries(job, preview.messageId, chunk);
+		if (edited !== undefined) return record(job, state, index, edited);
 	}
 	if (state.inFlight === index) {
 		job.deps.log.warn("delivery_unknown", { chat: job.task.input.chatId, chunk: index, reason: "restart during send" });
@@ -95,7 +98,26 @@ async function save(job: Job, state: SendState): Promise<void> {
 	await job.runtime.commit((): Next => ({ status: "running", checkpoint: state }), job.context);
 }
 
-async function editPreview(job: Job, messageId: number, chunk: Chunk): Promise<Sent> {
+/**
+ * The edit is idempotent, so an outage (network, 5xx) is waited out with backoff instead of being recorded as done.
+ * `undefined`: the preview cannot carry the answer (deleted, or Telegram stayed down); a new message is sent.
+ */
+async function editWithRetries(job: Job, messageId: number, chunk: Chunk): Promise<Sent | undefined> {
+	const delays = job.deps.editRetryDelaysMs ?? EDIT_RETRY_DELAYS_MS;
+	for (let attempt = 0; ; attempt++) {
+		const edited = await withRateLimit(job, () => editPreview(job, messageId, chunk));
+		if (edited.kind === "gone") return undefined;
+		if (edited.kind !== "unavailable") return edited;
+		const delay = delays[attempt];
+		if (delay === undefined) {
+			job.deps.log.warn("preview_edit_gave_up", { chat: job.task.input.chatId, attempts: attempt + 1 });
+			return undefined;
+		}
+		await job.runtime.sleep(job.runtime.now() + delay, job.context);
+	}
+}
+
+async function editPreview(job: Job, messageId: number, chunk: Chunk): Promise<Edited> {
 	const { port } = job;
 	const { chatId } = job.task.input;
 	const signal = job.runtime.signal;
@@ -109,6 +131,7 @@ async function editPreview(job: Job, messageId: number, chunk: Chunk): Promise<S
 		const kind = classifyTelegramError(error).kind;
 		if (kind === "not_modified") return { kind: "sent", messageId };
 		if (kind === "message_gone") return { kind: "gone" };
+		if (kind === "unavailable") return { kind: "unavailable" };
 		throw error;
 	}
 }
@@ -126,7 +149,7 @@ async function sendNew(job: Job, chunk: Chunk, first: boolean): Promise<Sent> {
 }
 
 /** Retry a Telegram call after 429 (nothing was sent); classify every other failure. Aborts propagate. */
-async function withRateLimit(job: Job, call: () => Promise<Sent>): Promise<Sent> {
+async function withRateLimit<T extends Edited>(job: Job, call: () => Promise<T>): Promise<T | Sent> {
 	for (let waits = 0; ; waits++) {
 		const attempt = await attemptOnce(job, call, waits < MAX_RATE_LIMIT_WAITS);
 		if (attempt.retryAfterMs === undefined) return attempt.sent;
@@ -134,9 +157,9 @@ async function withRateLimit(job: Job, call: () => Promise<Sent>): Promise<Sent>
 	}
 }
 
-type Attempt = { sent: Sent; retryAfterMs?: undefined } | { retryAfterMs: number };
+type Attempt<T> = { sent: T | Sent; retryAfterMs?: undefined } | { retryAfterMs: number };
 
-async function attemptOnce(job: Job, call: () => Promise<Sent>, mayWait: boolean): Promise<Attempt> {
+async function attemptOnce<T extends Edited>(job: Job, call: () => Promise<T>, mayWait: boolean): Promise<Attempt<T>> {
 	try {
 		return { sent: await call() };
 	} catch (error) {

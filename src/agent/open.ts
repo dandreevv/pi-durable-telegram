@@ -38,6 +38,7 @@ export type OpenAgentDeps = {
 	/** Environment the agent's bash sees, before the allowlist filter; default `process.env`. */
 	readonly shellEnv?: Readonly<Record<string, string | undefined>>;
 	readonly previewIntervalMs?: number;
+	readonly editRetryDelaysMs?: readonly number[];
 	readonly limits?: { readonly downloadBytes?: number; readonly uploadBytes?: number };
 	readonly now?: () => number;
 };
@@ -72,6 +73,7 @@ export async function openAgent(config: Config, deps: OpenAgentDeps = {}): Promi
 			port: deps.port,
 			onFatal: deps.onFatal,
 			previewIntervalMs: deps.previewIntervalMs,
+			editRetryDelaysMs: deps.editRetryDelaysMs,
 			limits: deps.limits,
 		}),
 	});

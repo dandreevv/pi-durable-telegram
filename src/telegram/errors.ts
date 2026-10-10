@@ -66,6 +66,8 @@ function classifyApiError(error: TelegramApiError): TelegramErrorKind {
 	if (goneError.test(text)) return { kind: "message_gone" };
 	if (error.code === 413 || /too long|too big|too large/i.test(text)) return { kind: "too_big" };
 	if (error.code === 403) return { kind: "blocked" };
+	// An idempotent call answered 5xx after its retries: the same as unreachable.
+	if (error.code >= 500) return { kind: "unavailable" };
 	return { kind: "rejected", description: text.slice(0, 200) };
 }
 

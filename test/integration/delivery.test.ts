@@ -6,7 +6,7 @@ import { InboxDoc, LiveDoc } from "@earendil-works/pi-durable";
 import { ChatMap, Delivered } from "../../src/channel/docs.ts";
 import { splitForTelegram } from "../../src/format/chunk.ts";
 import { markdownToTelegramHtml } from "../../src/format/markdown-html.ts";
-import { TelegramApiError, TelegramUnknown } from "../../src/telegram/errors.ts";
+import { TelegramApiError, TelegramUnavailable, TelegramUnknown } from "../../src/telegram/errors.ts";
 import { CHAT, newFaux, startTestAgent, type TestAgent, tempDir } from "../helpers/agent.ts";
 import { waitFor } from "../helpers/env.ts";
 import { FakeTelegram } from "../helpers/fake-telegram.ts";
@@ -21,9 +21,10 @@ afterEach(async () => {
 async function setup(
 	faux: FauxProviderHandle,
 	port = new FakeTelegram(),
+	deps: { editRetryDelaysMs?: readonly number[] } = {},
 ): Promise<{ t: TestAgent; port: FakeTelegram }> {
 	const { dir, cleanup } = await tempDir();
-	const t = await startTestAgent({ dir, faux, port });
+	const t = await startTestAgent({ dir, faux, port, deps });
 	cleanups.push(cleanup, () => t.close());
 	return { t, port };
 }
@@ -219,4 +220,47 @@ test("T-busy-queue: a message during a run is queued and answered after it, in o
 		],
 	);
 	assert.equal(markdownToTelegramHtml("answer one"), "answer one");
+});
+
+test("T-edit-unavailable: a final preview edit that hits a Telegram outage is retried, the answer arrives", async () => {
+	const faux = newFaux({ tokensPerSecond: 150 });
+	const answer = `Answer ${words(200)} THE END`;
+	faux.setResponses([fauxAssistantMessage(answer)]);
+	const port = new FakeTelegram();
+	let failures = 0;
+	port.use((call) => {
+		if (call.method === "editMessageText" && call.options?.fast !== true && failures < 2) {
+			failures++;
+			throw new TelegramUnavailable("editMessageText", "network error");
+		}
+	});
+	const { t } = await setup(faux, port, { editRetryDelaysMs: [100, 100, 100] });
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 19, "go"));
+	const final = splitForTelegram(answer)[0]?.html ?? "?";
+	await waitFor(() => t.logs.some((line) => line.includes("info delivered")), { what: "delivered", timeoutMs: 20_000 });
+	assert.equal(failures, 2);
+	assert.ok(port.textsIn(CHAT).includes(final), "final answer reached the chat");
+	assert.equal(port.created(CHAT).length, 1, "the preview became the answer, nothing sent twice");
+	const delivered = await t.agent.harness.snapshot(Delivered, (await conversationId(t)) as never, BG);
+	assert.deepEqual(
+		Object.values(delivered?.answers ?? {}).map((a) => a.state),
+		["sent"],
+	);
+});
+
+test("T-edit-unavailable-gives-up: a preview that never becomes editable is replaced by a new message", async () => {
+	const faux = newFaux({ tokensPerSecond: 150 });
+	const answer = `Answer ${words(200)} THE END`;
+	faux.setResponses([fauxAssistantMessage(answer)]);
+	const port = new FakeTelegram();
+	port.use((call) => {
+		if (call.method === "editMessageText" && call.options?.fast !== true)
+			throw new TelegramApiError("editMessageText", 502, "Bad Gateway");
+	});
+	const { t } = await setup(faux, port, { editRetryDelaysMs: [10, 10] });
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 22, "go"));
+	const final = splitForTelegram(answer)[0]?.html ?? "?";
+	await waitFor(() => port.textsIn(CHAT).includes(final), { what: "final as a new message", timeoutMs: 20_000 });
+	assert.equal(port.created(CHAT).filter((m) => m.text === final).length, 1);
+	assert.equal(port.created(CHAT).find((m) => m.text === final)?.replyTo, 22);
 });

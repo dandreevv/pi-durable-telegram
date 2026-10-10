@@ -43,6 +43,8 @@ export type TelegramChannelOptions = {
 	readonly onFatal?: FatalHandler;
 	/** Minimum pause between preview edits (default 1000 ms). */
 	readonly previewIntervalMs?: number;
+	/** Pauses between final preview edits while Telegram is unreachable, before a new message is sent instead. */
+	readonly editRetryDelaysMs?: readonly number[];
 };
 
 export interface TelegramChannel {
@@ -105,6 +107,7 @@ export function createTelegramChannel(options: TelegramChannelOptions): Telegram
 		model: options.model,
 		onFatal,
 		...(options.previewIntervalMs === undefined ? {} : { previewIntervalMs: options.previewIntervalMs }),
+		...(options.editRetryDelaysMs === undefined ? {} : { editRetryDelaysMs: options.editRetryDelaysMs }),
 	};
 	const deliver = createDeliverTask(deps);
 	const compactReport = createCompactReportTask(deps);

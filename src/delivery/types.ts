@@ -46,4 +46,6 @@ export type DeliveryDeps = {
 	readonly model: ModelRef;
 	readonly onFatal: FatalHandler;
 	readonly previewIntervalMs?: number;
+	/** Pauses between final preview edits during a Telegram outage (default `EDIT_RETRY_DELAYS_MS`). */
+	readonly editRetryDelaysMs?: readonly number[];
 };
