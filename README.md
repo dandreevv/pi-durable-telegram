@@ -14,32 +14,29 @@
 [![pi package](https://img.shields.io/badge/pi-package-E0873A)](https://pi.dev/packages)
 [![Telegram](https://img.shields.io/badge/Telegram-bot-26A5E4?logo=telegram&logoColor=white)](https://core.telegram.org/bots)
 
-[Install](#install) · [What you can do](#what-you-can-do) · [How it works](#how-it-works) · [Commands](#commands) · [Is it safe?](#is-it-safe) · [Questions](#questions) · [Docs](#documentation)
+[Install](#install) · [What you can do](#what-you-can-do) · [Commands](#commands) · [More](#more)
 
 </div>
 
 ---
 
-You write to a Telegram bot from your phone. On the other end is an AI agent running on your own server: it can run
-commands, read and write files, look at photos, listen to voice notes and send files back. It keeps working when your
-laptop is closed, it remembers the conversation, and if the server restarts in the middle of an answer, it picks up
-where it stopped and still replies.
-
-It is built on [pi](https://pi.dev), an open-source coding agent, and its new durable engine
+Built on [pi](https://pi.dev), an open-source coding agent, and its new durable engine
 [pi-durable](https://earendil.com/posts/pi-durable/).
 
 ## Install
 
-You need three things: a Linux server (a small VPS is enough), a Telegram account, and an AI subscription or API key
-(Claude, ChatGPT, OpenRouter and others work).
-
-Log in to the server and paste one command:
+You need a Linux server, a Telegram account and an AI subscription or API key. On the server, run:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/smixs/pi-durable-telegram/main/install.sh | bash
 ```
 
-The script first tells you what it is going to do and asks if it may continue. Then it walks you through four things:
+It asks a few questions and your bot answers you in Telegram. Run it again to update.
+
+<details>
+<summary>What the script does, step by step</summary>
+
+The script first tells you what it is going to do and asks if it may continue. Then:
 
 1. **Installs pi**, the official one from [pi.dev](https://pi.dev).
 2. **Opens pi so you can sign in** to your AI provider. Type `/login`, pick the provider, then `/quit`.
@@ -47,21 +44,32 @@ The script first tells you what it is going to do and asks if it may continue. T
    it gives you. Then send your new bot any message, so the script learns who you are.
 4. **Starts the agent** and waits until the bot answers you.
 
-That is all. To update later, run the same command again.
+More in [docs/install.md](docs/install.md).
+
+</details>
 
 ## What you can do
 
-- **Ask from anywhere.** "Check why the site is down", "what is eating the disk", "write a script that renames these
-  files". The agent works on the server and answers in the chat.
-- **Send it things.** A photo of an error, a PDF, a voice note while you walk. It reads, looks and listens.
-- **Get files back.** Ask for a report or an archive and it arrives in the chat.
-- **Walk away.** Close the laptop, lose the connection, come back in an hour. The answer is waiting.
-- **Keep the thread.** It remembers what you discussed. Long conversations are tidied up in the background so they
-  never hit a limit.
-- **Teach it your server.** One text file, `AGENTS.md`, tells the agent what lives on the machine and what it must not
-  touch.
+- **Ask from anywhere.** "Check why the site is down", "what is eating the disk". The agent works on the server and
+  answers in the chat.
+- **Send it things.** A photo of an error, a PDF, a voice note. It reads, looks and listens, and sends files back.
+- **Walk away.** Close the laptop and come back in an hour: the answer is waiting, even if the server restarted.
 
-## How it works
+## Commands
+
+| Send this | And the agent will |
+|---|---|
+| any text, photo, file or voice note | work on it and answer |
+| `/new` | start a fresh conversation (the old one is kept) |
+| `/stop` | stop what it is doing right now |
+| `/compact` | shorten a long conversation to its essentials |
+| `/status` | show the AI model in use, how full the memory is and what it has cost |
+| `/help` | show this list |
+
+## More
+
+<details>
+<summary><b>How it works</b></summary>
 
 <img src="assets/how-it-works.webp" alt="How it works: a person on a bench sends paper airplanes from a phone to a small server on the horizon, and answers fly back" width="100%">
 
@@ -75,18 +83,10 @@ no domain and no web server.
 server reboots or the program crashes halfway through an answer, the agent starts again, finds its bookmark and
 finishes. You get one answer, not zero and not two. Messages you send while it is busy wait in line.
 
-## Commands
+</details>
 
-| Send this | And the agent will |
-|---|---|
-| any text, photo, file or voice note | work on it and answer |
-| `/new` | start a fresh conversation (the old one is kept) |
-| `/stop` | stop what it is doing right now |
-| `/compact` | shorten a long conversation to its essentials |
-| `/status` | show the AI model in use, how full the memory is and what it has cost |
-| `/help` | show this list |
-
-## Is it safe?
+<details>
+<summary><b>Is it safe?</b></summary>
 
 <img src="assets/security.webp" alt="A narrow server house with one orange door: one paper airplane flies in through the porthole, the grey ones lie by the fence" width="100%">
 
@@ -99,7 +99,10 @@ finishes. You get one answer, not zero and not two. Messages you send while it i
 
 The details are in [docs/security.md](docs/security.md).
 
-## Questions
+</details>
+
+<details>
+<summary><b>Questions</b></summary>
 
 **Do I need to be a programmer?**
 No, but you need a server and you need to paste one command into it. After that everything happens in Telegram.
@@ -125,7 +128,10 @@ Yes, if you add a [Deepgram](https://deepgram.com) key during installation.
 **How do I remove it?**
 A few commands, listed in [docs/install.md](docs/install.md#removing).
 
-## Documentation
+</details>
+
+<details>
+<summary><b>Documentation</b></summary>
 
 | Read this | When you want to |
 |---|---|
@@ -136,7 +142,10 @@ A few commands, listed in [docs/install.md](docs/install.md#removing).
 | [docs/library.md](docs/library.md) | build your own app on top of it, or contribute code |
 | [CHANGELOG.md](CHANGELOG.md) | see what changed between versions |
 
-## For AI agents
+</details>
+
+<details>
+<summary><b>For AI agents</b></summary>
 
 If you are an AI agent reading this for a person, here is where things are and what makes this project different.
 
@@ -170,6 +179,8 @@ Linux with Node.js 22.19 or newer.
 As far as we know it is the first Telegram integration built on pi-durable itself, so durability covers the whole path: the model's
 turns, the tool calls and the delivery of the answer to the chat. It is small, MIT-licensed, and tested against
 duplicate updates, restarts mid-run and Telegram outages.
+
+</details>
 
 ## License
 
