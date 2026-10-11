@@ -62,9 +62,15 @@ EOF
 )
 ```
 
-Provider, model and thinking level come from pi's settings. Add `PI_PROVIDER`, `PI_MODEL` or `PI_THINKING` to the env
-file only if the user wants something different for Telegram. For voice messages add `DEEPGRAM_API_KEY` if the user
-has one.
+Add the model to the env file. Use the provider and model you are running as right now (a fresh pi has no default
+saved in its settings, so the daemon cannot guess it), unless the user wants a different or cheaper one for Telegram:
+
+```sh
+printf 'PI_PROVIDER=%s\nPI_MODEL=%s\n' "<provider>" "<model id>" >> ~/.config/pi-durable-telegram/env
+```
+
+`PI_THINKING` is optional (`off`, `low`, `medium`, `high`, ...); the daemon refuses to start when the model does not
+support the level and names the ones it does. For voice messages add `DEEPGRAM_API_KEY` if the user has one.
 
 Write `~/pi-agent/AGENTS.md`: it goes into the agent's system prompt and is re-read when it changes. Look around the
 server first (`systemctl --user list-units --type=service`, the home directory) and draft it with the user:
@@ -110,7 +116,7 @@ loginctl enable-linger "$USER"
 
 | Symptom | Cause and fix |
 |---|---|
-| Exit code 2 at start | Bad config or rejected bot token; the journal names each problem |
+| Exit code 2 at start | Bad config, rejected bot token or a thinking level the model lacks; the journal names each problem |
 | Exit code 3 | Another process owns the data directory; stop it |
 | Exit code 4 or "run login" in chat | pi is not logged in to the provider in use: `/login` in pi, then restart the service |
 | 409 Conflict in the journal | Another process polls the same bot token; stop it or use another bot |
