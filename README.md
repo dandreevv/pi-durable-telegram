@@ -6,361 +6,170 @@
 
 # pi-durable telegram
 
-**An always-on, durable [pi](https://pi.dev) agent on your own server that you talk to in Telegram.**
+**Your own AI agent that lives on your server and answers you in Telegram.**
 
 [![Version](https://img.shields.io/github/package-json/v/smixs/pi-durable-telegram?color=brightgreen)](https://github.com/smixs/pi-durable-telegram/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![built on pi-durable](https://img.shields.io/badge/built%20on-pi--durable-4A97BE)](https://github.com/earendil-works/pi/tree/main/packages/durable)
 [![pi package](https://img.shields.io/badge/pi-package-E0873A)](https://pi.dev/packages)
-[![Node 22.19+](https://img.shields.io/badge/node-%E2%89%A522.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Telegram](https://img.shields.io/badge/Telegram-bot-26A5E4?logo=telegram&logoColor=white)](https://core.telegram.org/bots)
 
-[Get started](#get-started-with-one-command) · [Why](#why) · [How it works](#how-it-works) · [Durability](#what-durable-means-here) · [Commands](#telegram-commands) · [Security](#security) · [FAQ](#faq)
+[Install](#install) · [What you can do](#what-you-can-do) · [How it works](#how-it-works) · [Commands](#commands) · [Is it safe?](#is-it-safe) · [Questions](#questions) · [Docs](#documentation)
 
 </div>
 
 ---
 
-pi-durable-telegram is an open-source Telegram gateway for [pi-durable](https://github.com/earendil-works/pi/tree/main/packages/durable),
-the durable agent harness from the pi project. It runs a personal coding agent as a service on your VPS or home
-server, keeps every conversation in SQLite, and survives crashes and restarts: an unfinished run continues after the
-process comes back, and its answer still reaches your chat. You write to the bot from your phone; the agent works on
-the server with a real shell, files and your instructions.
+You write to a Telegram bot from your phone. On the other end is an AI agent running on your own server: it can run
+commands, read and write files, look at photos, listen to voice notes and send files back. It keeps working when your
+laptop is closed, it remembers the conversation, and if the server restarts in the middle of an answer, it picks up
+where it stopped and still replies.
 
-## Get started with one command
+It is built on [pi](https://pi.dev), an open-source coding agent, and its new durable engine
+[pi-durable](https://earendil.com/posts/pi-durable/).
 
-On your server, as the user the agent should work as:
+## Install
+
+You need three things: a Linux server (a small VPS is enough), a Telegram account, and an AI subscription or API key
+(Claude, ChatGPT, OpenRouter and others work).
+
+Log in to the server and paste one command:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/smixs/pi-durable-telegram/main/install.sh | bash
 ```
 
-The script says what it will do and asks before it starts. Then it:
+The script first tells you what it is going to do and asks if it may continue. Then it walks you through four things:
 
-1. installs the official pi from [pi.dev](https://pi.dev) (skipped if you already have it);
-2. opens pi so you log in with `/login` to any provider pi supports: a Claude or ChatGPT subscription, an API key;
-3. asks for a bot token from [@BotFather](https://t.me/BotFather) and finds your Telegram id when you message the bot;
-4. installs the daemon, starts it as a systemd service and waits until the bot answers you.
+1. **Installs pi**, the official one from [pi.dev](https://pi.dev).
+2. **Opens pi so you can sign in** to your AI provider. Type `/login`, pick the provider, then `/quit`.
+3. **Asks for a bot token.** In Telegram, open [@BotFather](https://t.me/BotFather), send `/newbot`, and copy the token
+   it gives you. Then send your new bot any message, so the script learns who you are.
+4. **Starts the agent** and waits until the bot answers you.
 
-Run the same command again to update. Already working in pi? `pi install git:github.com/smixs/pi-durable-telegram`
-and `/skill:pi-durable-telegram` do the same from inside pi.
+That is all. To update later, run the same command again.
 
-## Why
+## What you can do
 
-- **Your agent keeps working when you close the laptop.** It lives on a server, not in a terminal tab. Ask from the
-  phone, come back later, the answer is in the chat.
-- **Restarts do not lose work.** Deploys, reboots, out-of-memory kills: pi-durable commits every step before it is
-  shown, so a run picks up where it stopped and the answer is delivered once.
-- **It remembers the thread.** One durable conversation per chat, compacted in the background when it grows. `/new`
-  starts fresh and keeps the old history in storage.
-- **It is a coding agent, not a chatbot.** `bash`, `read`, `write`, `edit`, images, files in and out, voice notes.
-- **Small and readable.** A thin layer over pi-durable and grammY, MIT-licensed, tested against hostile input.
+- **Ask from anywhere.** "Check why the site is down", "what is eating the disk", "write a script that renames these
+  files". The agent works on the server and answers in the chat.
+- **Send it things.** A photo of an error, a PDF, a voice note while you walk. It reads, looks and listens.
+- **Get files back.** Ask for a report or an archive and it arrives in the chat.
+- **Walk away.** Close the laptop, lose the connection, come back in an hour. The answer is waiting.
+- **Keep the thread.** It remembers what you discussed. Long conversations are tidied up in the background so they
+  never hit a limit.
+- **Teach it your server.** One text file, `AGENTS.md`, tells the agent what lives on the machine and what it must not
+  touch.
 
 ## How it works
 
 <img src="assets/how-it-works.webp" alt="How it works: a person on a bench sends paper airplanes from a phone to a small server on the horizon, and answers fly back" width="100%">
 
-```mermaid
-flowchart LR
-  P[You in Telegram] -- message, photo, voice --> B[Telegram Bot API]
-  B -- long polling --> D[pi-durable-telegram daemon]
-  D -- durable submit --> H[pi-durable harness]
-  H <--> S[(SQLite: transcript, tasks, delivery)]
-  H -- model turns --> M[Claude / any pi-ai provider]
-  H -- tools --> T[bash · read · write · edit · send file]
-  D -- streamed answer --> B --> P
-```
-
-The daemon long-polls Telegram, so there is no public HTTPS endpoint, domain or webhook to run. Each allowed chat maps
-to one pi-durable conversation. Your message becomes a durable submission, the harness runs model turns and tools as
-checkpointed tasks, and the answer streams back into one Telegram message that is edited about once per second.
-
-## Features
-
-<details>
-<summary><b>Durable conversations, streaming, queueing, files, voice, tools: expand the full list</b></summary>
-
-- **Durable conversations.** One pi-durable conversation per allowed chat, stored in SQLite. After a crash or a
-  restart, unfinished runs resume and their answers are delivered once. Telegram delivery state is durable too, and
-  redelivered Telegram updates are never submitted twice.
-- **Streaming.** The answer streams into one message with a typing indicator and short tool hints
-  (`⚙ bash: npm test`). Long answers are split at 4096 characters. Model Markdown becomes Telegram HTML, with a
-  plain-text fallback if Telegram rejects it.
-- **Queueing.** Messages sent while the agent works are queued and answered in order. Nothing is dropped.
-- **Commands.** `/new`, `/stop`, `/compact`, `/status`, `/help`.
-- **Files.** Photos and documents (up to 20 MB, the Bot API limit) are saved to `<workdir>/inbox/YYYY-MM-DD/`; the
-  agent gets the path and can look at images with `read`. It sends files back with the `telegram_send_file` tool (up
-  to 50 MB).
-- **Voice.** Voice messages, audio and video notes are transcribed with [Deepgram](https://deepgram.com) (`nova-3`,
-  automatic language detection) when `DEEPGRAM_API_KEY` is set.
-- **Tools.** `read` (text and images), `write`, `edit` and `bash`, working in `PI_WORKDIR` with the service user's
-  access. Secrets are stripped from the shell's environment.
-- **Instructions.** `<workdir>/AGENTS.md` is added to the system prompt and re-read when it changes: tell the agent
-  what lives on the server and what it must not touch.
-- **Any pi-ai model.** The model pi uses by default (`defaultProvider`, `defaultModel`, `defaultThinkingLevel` in
-  pi's settings), else Anthropic `claude-opus-5-5` with thinking `high`; `PI_PROVIDER`, `PI_MODEL` and `PI_THINKING`
-  override it.
-
-</details>
-
-## What "durable" means here
+Your message goes to Telegram, the agent on your server picks it up, thinks, uses its tools and types the answer back
+into the chat while you watch. Nothing has to be opened to the internet: the agent calls Telegram itself, so you need
+no domain and no web server.
 
 <img src="assets/durable.webp" alt="A server drawn as a closed book with a bookmark ribbon, its plug pulled out: it remembers where it stopped" width="100%">
 
-pi-durable writes every model turn, tool call and piece of state to storage before anything is shown. This package
-adds the Telegram side of the same promise:
+**It does not lose its place.** Every step the agent takes is saved before you see it. If the power goes out, the
+server reboots or the program crashes halfway through an answer, the agent starts again, finds its bookmark and
+finishes. You get one answer, not zero and not two. Messages you send while it is busy wait in line.
 
-| Event | What happens |
+## Commands
+
+| Send this | And the agent will |
 |---|---|
-| The process is killed while the model is answering | On start, `resume()` continues the run; the answer reaches the chat once |
-| Killed while a shell command runs | The model is told the tool was interrupted and decides what to do next |
-| Killed after the answer is stored but before Telegram got it | Delivery resumes from its stored progress; no duplicate message |
-| Telegram redelivers an update | The update id is already known; it is not submitted twice |
-| You write while the agent is busy | The message is queued durably and answered after the current run |
-| Telegram is unreachable for a while | Edits and sends retry with backoff, honouring `retry_after` |
+| any text, photo, file or voice note | work on it and answer |
+| `/new` | start a fresh conversation (the old one is kept) |
+| `/stop` | stop what it is doing right now |
+| `/compact` | shorten a long conversation to its essentials |
+| `/status` | show the AI model in use, how full the memory is and what it has cost |
+| `/help` | show this list |
 
-## Manual install
-
-Without the installer, step by step. You need a Linux server with systemd and Node.js 22.19 or newer, a bot token from
-[@BotFather](https://t.me/BotFather), your numeric Telegram user id (from [@userinfobot](https://t.me/userinfobot)) and
-a model provider account.
-
-1. **Install.**
-
-   ```sh
-   npm install -g https://github.com/smixs/pi-durable-telegram/releases/latest/download/pi-durable-telegram.tgz
-   ```
-
-2. **Configure.** Create `~/.config/pi-durable-telegram/env` with mode 600:
-
-   ```sh
-   TELEGRAM_BOT_TOKEN=123456789:AA...
-   TELEGRAM_ALLOWED_USER_IDS=111111111
-   PI_WORKDIR=/home/me/pi-agent
-   DEEPGRAM_API_KEY=...            # optional, for voice
-   ```
-
-3. **Log in.** If pi is logged in on this machine, skip this: the daemon shares pi's `~/.pi/agent/auth.json`. Put
-   the provider and model you want into the env file as `PI_PROVIDER` and `PI_MODEL` (a default saved in pi's
-   settings is picked up on its own). Otherwise run the command below, open the printed URL in any browser, sign in and paste
-   the code back. Credentials refresh automatically.
-
-   ```sh
-   pi-durable-telegram login anthropic --env-file ~/.config/pi-durable-telegram/env
-   ```
-
-4. **Run it as a service.**
-
-   ```sh
-   mkdir -p ~/.config/systemd/user
-   cp "$(npm root -g)/pi-durable-telegram/deploy/pi-durable-telegram.service" ~/.config/systemd/user/
-   systemctl --user daemon-reload
-   systemctl --user enable --now pi-durable-telegram
-   loginctl enable-linger "$USER"   # keep it running after you log out
-   ```
-
-5. **Say hello to your bot.** `journalctl --user -u pi-durable-telegram -f` shows `message_admitted` and `delivered`.
-
-systemd does not load your shell's `PATH`. If Node comes from nvm or another version manager, edit `ExecStart` to use
-absolute paths: `<path to node> <npm root -g>/pi-durable-telegram/dist/cli/main.js run --env-file ...`.
-
-> **Note on subscriptions.** Using a Claude subscription through OAuth in third-party tools may be restricted by
-> Anthropic's terms. Check them; using it this way is your responsibility. An API key (`ANTHROPIC_API_KEY`) works too.
-
-## Telegram commands
-
-| Command | What it does |
-|---|---|
-| `/new` | Fresh context; the old history stays in storage |
-| `/stop` | Stops the current run; queued messages continue |
-| `/compact [instructions]` | Compacts the context now, optionally with focus instructions |
-| `/status` | Model, thinking level, context use, spend, queue length |
-| `/help` | Short help |
-
-Any other text, photo, document or voice note goes to the agent.
-
-## Configuration
-
-Configuration comes from the environment, optionally loaded from a file with `--env-file <path>` (real environment
-variables win over the file). Invalid values stop the daemon at start with one line per problem.
-
-| Variable | Required | Default | Meaning |
-|---|---|---|---|
-| `TELEGRAM_BOT_TOKEN` | yes | | Bot token from @BotFather |
-| `TELEGRAM_ALLOWED_USER_IDS` | yes | | Comma-separated Telegram user ids allowed to use the bot |
-| `PI_PROVIDER` | no | pi's default, else `anthropic` | pi-ai provider id |
-| `PI_MODEL` | no | pi's default, else `claude-opus-5-5` | Model id of the provider |
-| `PI_THINKING` | no | pi's default, else `high` | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`; checked against the model |
-| `PI_WORKDIR` | no | current directory | The agent's working directory |
-| `PI_DATA_DIR` | no | `$XDG_STATE_HOME/pi-durable-telegram` or `~/.local/state/pi-durable-telegram` | SQLite storage and lock |
-| `PI_AUTH_FILE` | no | pi's `~/.pi/agent/auth.json` (or `$PI_CODING_AGENT_DIR/auth.json`) | Credentials file, shared with pi under pi's own lock. A `<PI_DATA_DIR>/auth.json` from an older version is used while pi has none |
-| `PI_INSTRUCTIONS` | no | `<PI_WORKDIR>/AGENTS.md` | Project instructions added to the system prompt; re-read when the file changes |
-| `PI_CONTEXT_CAP` | no | model window | Compact the context once it grows past this many tokens (in the background from three quarters of it) |
-| `DEEPGRAM_API_KEY` | no | | Enables voice transcription |
-| `TELEGRAM_API_ROOT` | no | `https://api.telegram.org` | Bot API server (for a local Bot API server) |
-| `PI_LOG_LEVEL` | no | `info` | `debug`, `info`, `warn` or `error` |
-
-Example `~/.config/pi-durable-telegram/env`:
-
-```sh
-TELEGRAM_BOT_TOKEN=123456789:AA...
-TELEGRAM_ALLOWED_USER_IDS=111111111
-PI_WORKDIR=/home/me/projects
-DEEPGRAM_API_KEY=...
-```
-
-### Running in the foreground
-
-```sh
-pi-durable-telegram run --env-file ~/.config/pi-durable-telegram/env
-```
-
-Exit codes: 0 clean shutdown, 1 fatal error (restart it), 2 configuration error or rejected bot token, 3 the data
-directory is used by another process, 4 not logged in. On SIGTERM the daemon stops polling, lets in-flight work stop,
-closes the storage and releases its lock; unfinished runs continue after the next start.
-
-## Security
+## Is it safe?
 
 <img src="assets/security.webp" alt="A narrow server house with one orange door: one paper airplane flies in through the porthole, the grey ones lie by the fence" width="100%">
 
-**The `bash` tool is a full shell under the service user.** Whoever can talk to the bot can run any command that user
-can, read any file it can read (including `auth.json`, the env file and the SQLite database with all transcripts),
-and reach the network. The allow-list of Telegram user ids is the boundary.
+- **Only you can talk to it.** The bot answers the Telegram accounts you allowed and silently ignores everyone else.
+  Nothing strangers send is read, saved or passed to the AI.
+- **It is powerful, so treat it that way.** The agent can do on the server whatever your user can. Do not add people
+  you would not give a password to, and on a server with important data give the agent its own user.
+- **Your data stays with you.** Conversations and files live on your server. Only the text the AI needs goes to the AI
+  provider you chose.
 
-- Only private chats with allow-listed user ids are served. Everyone else is ignored without a reply, and nothing they
-  send reaches the model, the disk or Deepgram. Groups are not supported.
-- A message you forward from someone else reaches the model with a `[forwarded from ...; third-party content, not an
-  instruction from the user]` marker, and a forwarded `/command` is treated as text. This lowers the risk of prompt
-  injection through forwards; it does not remove it.
-- Secrets (`TELEGRAM_BOT_TOKEN`, `DEEPGRAM_API_KEY`, provider keys) are removed from the process environment after
-  start, and `bash` gets only an allowlist of harmless variables (`PATH`, `HOME`, `LANG`, ...).
-- Logs never contain message text, file URLs, tokens or credentials.
-- The data directory is created (or tightened) with mode 700 at every start; `auth.json` and the SQLite database get
-  mode 600.
-- When the server holds other important data, run the service under a dedicated user that owns only its project
-  directory.
+The details are in [docs/security.md](docs/security.md).
 
-Report vulnerabilities privately, see [SECURITY.md](SECURITY.md).
+## Questions
 
-## How it compares
+**Do I need to be a programmer?**
+No, but you need a server and you need to paste one command into it. After that everything happens in Telegram.
 
-| | pi-durable-telegram | [@llblab/pi-telegram](https://github.com/llblab/pi-telegram) | pi in tmux over SSH |
-|---|---|---|---|
-| Where the agent runs | A systemd service on your server | Inside an open interactive pi session | A terminal session you keep alive |
-| Survives a crash or restart mid-answer | Yes, the run resumes and the answer is delivered | No | No |
-| Reach it from the phone | Telegram | Telegram | An SSH client |
-| History | Durable SQLite per chat, background compaction | pi session files | pi session files |
-| Best for | An always-on personal agent | Continuing a desktop pi session from the phone | Occasional remote work |
+**What does it cost?**
+The software is free. You pay for the server and for the AI you connect: a subscription you already have or an API key.
+`/status` shows what a conversation has cost.
 
-## FAQ
+**Which AI can I use?**
+Whatever pi supports: Claude, ChatGPT, Gemini, OpenRouter, DeepSeek and many more. You choose it when you sign in.
+Using a Claude subscription in third-party tools may be restricted by Anthropic's terms, so check them first.
 
-**What is pi-durable?**
-An experimental durable agent harness from the [pi](https://pi.dev) project (`@earendil-works/pi-durable`). It stores
-conversations, model turns, tool calls and app state in SQLite or JSONL and resumes unfinished work after a crash.
-See the [announcement](https://earendil.com/posts/pi-durable/).
-
-**Can I use my Claude Pro or Max subscription?**
-Log in with `/login` in pi (or `pi-durable-telegram login anthropic`); pi-ai's own Anthropic OAuth flow is used
-unchanged. Whether
-that is allowed for third-party tools is decided by Anthropic's terms, so check them. An API key works as well.
-
-**Which models work?**
-Any provider pi supports. By default the agent takes pi's default provider and model; Anthropic `claude-opus-5-5` is
-the tested path. `PI_PROVIDER`, `PI_MODEL` and `PI_THINKING` set it explicitly.
-
-**Do I need a domain, HTTPS or a webhook?**
-No. The daemon long-polls the Telegram Bot API from your server.
-
-**Can several people use one bot?**
-Yes: list their ids in `TELEGRAM_ALLOWED_USER_IDS`. Each private chat gets its own durable conversation. Everyone on
-the list gets the same shell access.
+**Can my team use the same bot?**
+Yes. Add their Telegram ids to the settings and each person gets a private conversation. Everyone you add gets the
+same power over the server.
 
 **Does it work in group chats?**
-Not in this version; only private chats are served.
+Not yet, only in private chats.
 
-**Where is my data?**
-On your server: the SQLite database in `PI_DATA_DIR` (`~/.local/state/pi-durable-telegram` by default), credentials
-in pi's `auth.json`, files in `<workdir>/inbox/`. Model requests go to the provider you choose, voice to Deepgram if enabled.
+**Does it understand voice messages?**
+Yes, if you add a [Deepgram](https://deepgram.com) key during installation.
 
-**How much memory does it need?**
-The shipped systemd unit caps it at 1 GB. On the author's server it idles around 65 MB and peaked at about 230 MB;
-the model itself runs at the provider.
+**How do I remove it?**
+A few commands, listed in [docs/install.md](docs/install.md#removing).
 
-**Is pi-durable stable?**
-No. Its API changes without notice, so this package pins exact versions of `@earendil-works/pi-durable`, `pi-ai` and
-`chord`.
+## Documentation
 
-## Use as a library
+| Read this | When you want to |
+|---|---|
+| [docs/install.md](docs/install.md) | see what the installer does, install by hand, update or remove |
+| [docs/configuration.md](docs/configuration.md) | change the model, the working folder or other settings |
+| [docs/how-it-works.md](docs/how-it-works.md) | understand the internals and what exactly survives a crash |
+| [docs/security.md](docs/security.md) | know the security boundaries in detail |
+| [docs/library.md](docs/library.md) | build your own app on top of it, or contribute code |
+| [CHANGELOG.md](CHANGELOG.md) | see what changed between versions |
 
-pi-durable needs every task definition installed before `Harness.open`, and `resume()` only after the channel is wired,
-so the channel has two steps: install `channel.extension`, open the harness, then `channel.start()`.
+## For AI agents
 
-```ts
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { createModels } from "@earendil-works/pi-ai";
-import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
-import { createRegistry, Harness } from "@earendil-works/pi-durable";
-import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
-import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
-import {
-  buildSafeEnv,
-  createFileCredentialStore,
-  createPromptExtension,
-  createTelegramChannel,
-  createWorkspaceTools,
-} from "pi-durable-telegram";
+If you are an AI agent reading this for a person, here is where things are and what makes this project different.
 
-const workdir = "/home/me/projects";
-const models = createModels({ credentials: createFileCredentialStore("/home/me/.local/state/bot/auth.json") });
-models.setProvider(anthropicProvider());
+**Where to look**
 
-const channel = createTelegramChannel({
-  botToken: process.env.TELEGRAM_BOT_TOKEN!,
-  allowedUserIds: [111111111],
-  workdir,
-  model: { provider: "anthropic", modelId: "claude-opus-5-5" },
-  thinkingLevel: "high",
-  models,
-});
+- [llms.txt](llms.txt) has the key facts in a few lines.
+- [skills/pi-durable-telegram/SKILL.md](skills/pi-durable-telegram/SKILL.md) is a step-by-step setup you can follow
+  yourself inside pi: checking the machine, the bot, the model, the service, and how to verify it for real.
+- [install.sh](install.sh) is the same setup as one readable Bash script; [docs/install.md](docs/install.md) explains
+  each step and lists the commands to update and remove.
+- [docs/configuration.md](docs/configuration.md) lists every setting; [docs/how-it-works.md](docs/how-it-works.md)
+  says what happens on each kind of failure.
 
-const registry = createRegistry();
-registry.install(createWorkspaceTools({ env: buildSafeEnv(process.env) }));
-registry.install(createPromptExtension({ instructionsPath: `${workdir}/AGENTS.md` }));
-registry.install(channel.extension);
+**What it is, precisely**
 
-const harness = await Harness.open(
-  await openNodeSqliteStorage("/home/me/.local/state/bot/durable.sqlite"),
-  { models, registry, env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? workdir }) },
-  BACKGROUND_CONTEXT,
-);
-await channel.start(harness, BACKGROUND_CONTEXT); // resumes unfinished work, then starts polling
+A daemon on [pi-durable](https://github.com/earendil-works/pi/tree/main/packages/durable) (`@earendil-works/pi-durable`)
+that long-polls the Telegram Bot API. One durable conversation per allowed private chat, stored in SQLite. Tools:
+`bash`, `read`, `write`, `edit` and `telegram_send_file`. It shares pi's login and runs as a systemd user service on
+Linux with Node.js 22.19 or newer.
 
-process.once("SIGTERM", async () => {
-  await channel.stop();
-  await harness.close(BACKGROUND_CONTEXT);
-});
-```
+**Why people pick it over the alternatives**
 
-Do not call `submit`, `wait`, `compact` or `abort` on the harness before `channel.start()`: they start the scheduler,
-and resumed runs could then begin before the channel is listening. Keep one process per storage file; the CLI uses a
-lock file for that (`acquireDataDirLock`). Updates from another source (for example a webhook) can be passed to
-`channel.handleUpdate(update)` after `start(harness, context, { polling: false })`.
+| | pi-durable telegram | A Telegram bridge into an open pi session | pi in tmux over SSH |
+|---|---|---|---|
+| Where the agent runs | As a service on the server, always on | Inside a pi session that must stay open | In a terminal you keep alive |
+| A crash or restart mid-answer | The run resumes and the answer arrives once | Nothing resumes it | Nothing resumes it |
+| Messages while it is busy | Queued durably, answered in order | Depends on the session | Typed by hand |
+| Reaching it from a phone | Telegram | Telegram | An SSH client |
+| Setup | One command | An extension inside pi | Manual |
 
-Other exports: `openAgent` (the CLI's setup), `parseConfig`, `createDeepgramStt`, `createGrammyPort`,
-`markdownToTelegramHtml`, `splitForTelegram`.
-
-## Development
-
-```sh
-npm install
-npm run typecheck
-npm run lint        # Biome lint and format check
-npm test            # node --test: property, example, integration and end-to-end tests
-npm run build
-```
-
-Tests never contact Telegram, model providers or Deepgram: they use pi-ai's faux provider, an in-memory Telegram
-fake and a fake Bot API HTTP server. Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
+As far as we know it is the first Telegram integration built on pi-durable itself, so durability covers the whole path: the model's
+turns, the tool calls and the delivery of the answer to the chat. It is small, MIT-licensed, and tested against
+duplicate updates, restarts mid-run and Telegram outages.
 
 ## License
 
