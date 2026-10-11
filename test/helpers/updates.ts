@@ -68,3 +68,17 @@ export function voiceUpdate(chatId: number, messageId: number, fileId: string, s
 		},
 	} as Update;
 }
+
+/** A private message with arbitrary content fields (video, sticker, location, ...). */
+export function mediaUpdate(chatId: number, messageId: number, fields: Record<string, unknown>): Update {
+	return {
+		update_id: nextUpdateId++,
+		message: {
+			message_id: messageId,
+			date: DATE,
+			chat: { id: chatId, type: "private", first_name: "U" },
+			from: { id: chatId, is_bot: false, first_name: "U" },
+			...fields,
+		},
+	} as Update;
+}

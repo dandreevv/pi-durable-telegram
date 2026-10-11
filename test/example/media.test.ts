@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
-import { attachmentNote, inboxPath, localDate } from "../../src/media/attachments.ts";
+import {
+	attachmentNote,
+	attachmentOf,
+	inboxPath,
+	localDate,
+	missingAttachmentNote,
+	otherNote,
+} from "../../src/media/attachments.ts";
 import { createDeepgramStt, kindForStatus, parseTranscript } from "../../src/media/deepgram.ts";
 import { SttError } from "../../src/media/stt.ts";
 import { DownloadError, downloadToFile } from "../../src/telegram/download.ts";
@@ -88,4 +95,47 @@ test("download: part file renamed atomically; limits and HTTP errors are token-f
 	} finally {
 		await cleanup();
 	}
+});
+
+test("attachments: every file kind is named by what the user sent", () => {
+	const base = { message_id: 1, date: 1, chat: { id: 1, type: "private" as const, first_name: "u" } };
+	const of = (fields: object) => attachmentOf({ ...base, ...fields } as never);
+	assert.deepEqual(of({ video: { file_id: "v", file_size: 9, mime_type: "video/quicktime" } }), {
+		kind: "video",
+		fileId: "v",
+		fileSize: 9,
+		name: "video.quicktime",
+		mime: "video/quicktime",
+	});
+	assert.equal(of({ video: { file_id: "v", file_name: "clip.mp4" } })?.name, "clip.mp4");
+	// An animation also carries a document; the user sent an animation.
+	assert.equal(
+		of({ animation: { file_id: "a" }, document: { file_id: "a", file_name: "x.gif.mp4" } })?.kind,
+		"animation",
+	);
+	assert.equal(of({ sticker: { file_id: "s" } })?.name, "sticker.webp");
+	assert.equal(of({ sticker: { file_id: "s", is_animated: true } })?.name, "sticker.tgs");
+	assert.equal(of({ sticker: { file_id: "s", is_video: true } })?.name, "sticker.webm");
+	assert.equal(of({ voice: { file_id: "o" } })?.name, "voice.ogg");
+	assert.equal(of({ audio: { file_id: "m", file_name: "song.flac" } })?.name, "song.flac");
+	assert.equal(of({ video_note: { file_id: "n" } })?.name, "video_note.mp4");
+	assert.equal(of({ location: { latitude: 1, longitude: 2 } }), undefined);
+});
+
+test("attachments: a file that was not fetched and a message without a file are still described to the model", () => {
+	const attachment = { kind: "video", fileId: "v", fileSize: 34 * 1024 * 1024, name: "clip.mp4", mime: "video/mp4" };
+	assert.equal(
+		missingAttachmentNote({ attachment, reason: "bots can download files up to 20 MB", caption: "look" }),
+		'[attachment] video "clip.mp4", 34.0 MB was not downloaded: bots can download files up to 20 MB\nCaption: look',
+	);
+	const base = { message_id: 1, date: 1, chat: { id: 1, type: "private" as const, first_name: "u" } };
+	assert.equal(
+		otherNote({ ...base, location: { latitude: 41.3, longitude: 69.2 } } as never),
+		'[telegram location] {"location":{"latitude":41.3,"longitude":69.2}}',
+	);
+	assert.match(
+		otherNote({ ...base, poll: { question: "q" }, caption: "c" } as never),
+		/^\[telegram poll\] .*\nCaption: c$/,
+	);
+	assert.equal(otherNote(base as never), "[telegram empty message] {}");
 });

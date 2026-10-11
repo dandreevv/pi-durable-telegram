@@ -1,21 +1,22 @@
 import type { Message } from "grammy/types";
+import { attachmentOf, isSpeech } from "../media/attachments.ts";
 
 export type Classified =
 	| { readonly kind: "command"; readonly name: string; readonly args: string }
 	| { readonly kind: "text"; readonly text: string }
-	| { readonly kind: "photo" | "document" }
+	/** Voice, audio or a video note: transcribed when speech-to-text is configured, otherwise handled as a file. */
 	| { readonly kind: "voice" }
-	| { readonly kind: "unsupported"; readonly what: string };
+	/** Any other file: photo, document, video, animation, sticker. */
+	| { readonly kind: "file" }
+	/** No text and no file: location, contact, poll, dice and whatever Telegram adds next. */
+	| { readonly kind: "other" };
 
-/** What an incoming message is, by its content. Pure. */
+/** What an incoming message is, by its content. Pure. Nothing an allowed user sends is refused here. */
 export function classifyMessage(message: Message): Classified {
 	if (message.text !== undefined) return classifyText(message.text);
-	if (message.photo !== undefined && message.photo.length > 0) return { kind: "photo" };
-	if (message.document !== undefined) return { kind: "document" };
-	if (message.voice !== undefined || message.audio !== undefined || message.video_note !== undefined)
-		return { kind: "voice" };
-	const what = ["sticker", "video", "animation", "location", "contact", "poll", "dice"].find((key) => key in message);
-	return { kind: "unsupported", what: what ?? "message" };
+	const attachment = attachmentOf(message);
+	if (attachment === undefined) return { kind: "other" };
+	return { kind: isSpeech(attachment) ? "voice" : "file" };
 }
 
 /** `/name@bot args` → command; anything else is text. */

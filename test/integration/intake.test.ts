@@ -16,7 +16,7 @@ import { sleep, waitFor } from "../helpers/env.ts";
 import { FakeTelegram } from "../helpers/fake-telegram.ts";
 import { lastUserText, observe } from "../helpers/faux-steps.ts";
 import { pngBytes } from "../helpers/images.ts";
-import { documentUpdate, photoUpdate, textUpdate, voiceUpdate } from "../helpers/updates.ts";
+import { documentUpdate, mediaUpdate, photoUpdate, textUpdate, voiceUpdate } from "../helpers/updates.ts";
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -114,17 +114,67 @@ test("document: non-image documents are saved without the image hint", async () 
 	assert.ok(!seen.includes("read tool"));
 });
 
-test("T-file-too-big: files over 20 MB get one line before any download; nothing is submitted", async () => {
+test("T-file-too-big: a file over 20 MB is not downloaded, and the model is told what was sent and why", async () => {
 	const faux = newFaux();
+	let seen = "";
+	faux.setResponses([
+		observe((messages) => {
+			seen = lastUserText(messages);
+		}, fauxAssistantMessage("too large, send a link")),
+	]);
 	const { t, port } = await setup(faux);
-	await t.agent.channel.handleUpdate(photoUpdate(CHAT, 9, "huge", 25 * 1024 * 1024));
-	await waitFor(() => port.textsIn(CHAT).length === 1);
-	assert.match(port.textsIn(CHAT)[0] ?? "", /too big for bots \(max 20 MB\)/);
+	await t.agent.channel.handleUpdate(photoUpdate(CHAT, 9, "huge", 25 * 1024 * 1024, "see this"));
+	await waitFor(() => port.textsIn(CHAT).includes("too large, send a link"));
+	assert.equal(
+		seen,
+		'[attachment] photo "photo.jpg", 25.0 MB was not downloaded: bots can download files up to 20 MB\nCaption: see this',
+	);
 	assert.equal(port.count("getFile"), 0);
-	assert.equal(await deliverTasks(t.agent.harness), 0);
-	await t.agent.channel.handleUpdate(photoUpdate(CHAT, 9, "huge", 25 * 1024 * 1024));
+	await t.agent.channel.handleUpdate(photoUpdate(CHAT, 9, "huge", 25 * 1024 * 1024, "see this"));
 	await sleep(100);
-	assert.equal(port.textsIn(CHAT).length, 1, "a redelivery does not reply again");
+	assert.equal(faux.state.callCount, 1, "a redelivery is not submitted again");
+});
+
+test("T-any-file: video, animation and sticker are saved and handed to the model like any other file", async () => {
+	const faux = newFaux();
+	const seen: string[] = [];
+	const answer = (text: string) =>
+		observe((messages) => {
+			seen.push(lastUserText(messages));
+		}, fauxAssistantMessage(text));
+	faux.setResponses([answer("a1"), answer("a2"), answer("a3")]);
+	const { t, port } = await setup(faux);
+	for (const id of ["vid", "gif", "stk"]) port.files.set(id, new Uint8Array([1, 2, 3]));
+	const video = { file_id: "vid", file_unique_id: "u", duration: 23, width: 9, height: 16, file_size: 3 };
+	await t.agent.channel.handleUpdate(mediaUpdate(CHAT, 20, { video, caption: "funny" }));
+	await waitFor(() => port.textsIn(CHAT).includes("a1"));
+	await t.agent.channel.handleUpdate(mediaUpdate(CHAT, 21, { animation: { ...video, file_id: "gif" } }));
+	await waitFor(() => port.textsIn(CHAT).includes("a2"));
+	const sticker = { file_id: "stk", file_unique_id: "s", width: 512, height: 512, is_video: true, type: "regular" };
+	await t.agent.channel.handleUpdate(mediaUpdate(CHAT, 22, { sticker }));
+	await waitFor(() => port.textsIn(CHAT).includes("a3"));
+	assert.match(
+		seen[0] ?? "",
+		/^\[attachment\] video saved to inbox\/\d{4}-\d{2}-\d{2}\/20-video\.mp4 .*\nCaption: funny$/,
+	);
+	assert.match(seen[1] ?? "", /^\[attachment\] animation saved to inbox\/\d{4}-\d{2}-\d{2}\/21-animation\.mp4/);
+	assert.match(seen[2] ?? "", /^\[attachment\] sticker saved to inbox\/\d{4}-\d{2}-\d{2}\/22-sticker\.webm/);
+	for (const text of seen) assert.ok(existsSync(/\(absolute: ([^)]+)\)/.exec(text)?.[1] ?? ""), text);
+	assert.equal(port.created(CHAT).filter((m) => /not supported/.test(m.text ?? "")).length, 0);
+});
+
+test("T-no-file-kinds: a location reaches the model as its own fields", async () => {
+	const faux = newFaux();
+	let seen = "";
+	faux.setResponses([
+		observe((messages) => {
+			seen = lastUserText(messages);
+		}, fauxAssistantMessage("that is Tashkent")),
+	]);
+	const { t, port } = await setup(faux);
+	await t.agent.channel.handleUpdate(mediaUpdate(CHAT, 23, { location: { latitude: 41.3, longitude: 69.2 } }));
+	await waitFor(() => port.textsIn(CHAT).includes("that is Tashkent"));
+	assert.equal(seen, '[telegram location] {"location":{"latitude":41.3,"longitude":69.2}}');
 });
 
 test("voice: transcribed, echoed, and submitted with a marker", async () => {
@@ -144,9 +194,15 @@ test("voice: transcribed, echoed, and submitted with a marker", async () => {
 	assert.equal(port.created(CHAT)[0]?.text, "🎙 hello from audio/ogg");
 });
 
-test("T-stt-errors: speech failures and a missing key get one line; nothing is submitted", async () => {
+test("T-stt-errors: without a transcript the audio is saved as a file and the model is told why", async () => {
 	const faux = newFaux();
-	let kind: "quota" | "auth" | "unavailable" = "quota";
+	const seen: string[] = [];
+	const answer = (text: string) =>
+		observe((messages) => {
+			seen.push(lastUserText(messages));
+		}, fauxAssistantMessage(text));
+	faux.setResponses([answer("q"), answer("u")]);
+	let kind: "quota" | "unavailable" = "quota";
 	const stt: Stt = {
 		transcribe: async () => {
 			throw new SttError(kind, "x");
@@ -155,20 +211,28 @@ test("T-stt-errors: speech failures and a missing key get one line; nothing is s
 	const { t, port } = await setup(faux, stt);
 	port.files.set("v", new Uint8Array([1]));
 	await t.agent.channel.handleUpdate(voiceUpdate(CHAT, 11, "v", 1));
+	await waitFor(() => port.textsIn(CHAT).includes("q"));
 	kind = "unavailable";
 	await t.agent.channel.handleUpdate(voiceUpdate(CHAT, 12, "v", 1));
-	await waitFor(() => port.textsIn(CHAT).length === 2);
-	assert.match(port.textsIn(CHAT)[0] ?? "", /quota/);
-	assert.match(port.textsIn(CHAT)[1] ?? "", /unavailable/);
+	await waitFor(() => port.textsIn(CHAT).includes("u"));
+	assert.match(seen[0] ?? "", /^\[attachment\] voice saved to inbox\/.*11-voice\.ogg .*\nNo transcript: .*quota/);
+	assert.match(seen[1] ?? "", /12-voice\.ogg .*\nNo transcript: .*unavailable/);
 	await t.agent.channel.handleUpdate(voiceUpdate(CHAT, 11, "v", 1));
 	await sleep(100);
-	assert.equal(port.textsIn(CHAT).length, 2, "no retry storm on redelivery");
-	assert.equal(faux.state.callCount, 0);
+	assert.equal(faux.state.callCount, 2, "a redelivery is not submitted again");
 
-	const plain = await setup(newFaux());
+	const plainFaux = newFaux();
+	let plainSeen = "";
+	plainFaux.setResponses([
+		observe((messages) => {
+			plainSeen = lastUserText(messages);
+		}, fauxAssistantMessage("saved")),
+	]);
+	const plain = await setup(plainFaux);
+	plain.port.files.set("v", new Uint8Array([1]));
 	await plain.t.agent.channel.handleUpdate(voiceUpdate(CHAT, 13, "v", 1));
-	await waitFor(() => plain.port.textsIn(CHAT).length === 1);
-	assert.match(plain.port.textsIn(CHAT)[0] ?? "", /not configured \(DEEPGRAM_API_KEY\)/);
+	await waitFor(() => plain.port.textsIn(CHAT).includes("saved"));
+	assert.match(plainSeen, /13-voice\.ogg .*\nNo transcript: speech-to-text is not configured \(DEEPGRAM_API_KEY\)\.$/);
 });
 
 test("T-fatal-poison: a poisoned session is fatal for the service", async () => {

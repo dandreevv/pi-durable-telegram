@@ -16,16 +16,16 @@ export interface Stt {
 	transcribe(bytes: Uint8Array, mime: string, signal: AbortSignal): Promise<Transcript>;
 }
 
-/** One line for the user per failure kind. */
+/** One line per failure kind, told to the model next to the saved audio file. */
 export function sttFailureText(kind: SttErrorKind): string {
 	switch (kind) {
 		case "auth":
-			return "Voice: the speech service rejected the API key (DEEPGRAM_API_KEY).";
+			return "the speech service rejected the API key (DEEPGRAM_API_KEY).";
 		case "quota":
-			return "Voice: the speech service quota or rate limit is exhausted, try later or send text.";
+			return "the speech service quota or rate limit is exhausted.";
 		case "bad_audio":
-			return "Voice: the speech service could not decode this audio.";
+			return "the speech service could not decode this audio.";
 		default:
-			return "Voice: speech service unavailable, try again or send text.";
+			return "the speech service is unavailable.";
 	}
 }

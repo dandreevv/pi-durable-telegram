@@ -61,10 +61,18 @@ test("message classification", () => {
 	assert.deepEqual(classifyText("a /new in text"), { kind: "text", text: "a /new in text" });
 	assert.deepEqual(classifyText("/path/to/file"), { kind: "text", text: "/path/to/file" });
 	const base = { message_id: 1, date: 1, chat: { id: 1, type: "private" as const, first_name: "u" } };
-	assert.deepEqual(classifyMessage({ ...base, sticker: {} } as never), { kind: "unsupported", what: "sticker" });
-	assert.deepEqual(classifyMessage({ ...base, voice: {} } as never), { kind: "voice" });
-	assert.deepEqual(classifyMessage({ ...base, video_note: {} } as never), { kind: "voice" });
-	assert.deepEqual(classifyMessage({ ...base, document: {} } as never), { kind: "document" });
+	const file = { file_id: "f" };
+	for (const key of ["voice", "audio", "video_note"]) {
+		assert.deepEqual(classifyMessage({ ...base, [key]: file } as never), { kind: "voice" }, key);
+	}
+	for (const key of ["document", "video", "animation", "sticker"]) {
+		assert.deepEqual(classifyMessage({ ...base, [key]: file } as never), { kind: "file" }, key);
+	}
+	assert.deepEqual(classifyMessage({ ...base, photo: [{ ...file, width: 1, height: 1 }] } as never), { kind: "file" });
+	// Nothing an allowed user sends is refused: kinds without text or a file go to the model as a description.
+	for (const key of ["location", "contact", "poll", "dice", "some_future_kind"]) {
+		assert.deepEqual(classifyMessage({ ...base, [key]: {} } as never), { kind: "other" }, key);
+	}
 });
 
 test("forward marker: origins are named, third-party names cannot break out of the marker", () => {

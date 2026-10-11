@@ -3,7 +3,14 @@ import { BACKGROUND_CONTEXT as BG } from "@earendil-works/chord/context";
 import type { Message, Update } from "grammy/types";
 import { probeImage } from "../agent/tools/image-probe.ts";
 import { truncate } from "../format/escape.ts";
-import { attachmentNote, attachmentOf, inboxPath, voiceOf } from "../media/attachments.ts";
+import {
+	type Attachment,
+	attachmentNote,
+	attachmentOf,
+	inboxPath,
+	missingAttachmentNote,
+	otherNote,
+} from "../media/attachments.ts";
 import { type Stt, SttError, sttFailureText } from "../media/stt.ts";
 import { isFatalHarnessError } from "../runtime/fatal.ts";
 import { errorSummary } from "../runtime/log.ts";
@@ -16,7 +23,7 @@ import { runHelp } from "./commands/start-help.ts";
 import { runStatus } from "./commands/status.ts";
 import { runStop } from "./commands/stop.ts";
 import { messageKey } from "./docs.ts";
-import { admit, isKnown, recordKey } from "./intake.ts";
+import { admit, isKnown } from "./intake.ts";
 import { forwardMarker } from "./provenance.ts";
 import { type ChannelRuntime, type MessageScope, reply } from "./scope.ts";
 
@@ -24,7 +31,9 @@ const MB = 1024 * 1024;
 
 /**
  * Handle one update: access gate, duplicate check, then a command, text, attachment or voice path that ends by
- * admitting a delivery task. Never awaits a model run; long commands run detached. Never throws.
+ * admitting a delivery task. Whatever an allowed user sends reaches the model: a file is saved and named, anything
+ * else is described; the model decides what to do with it. Never awaits a model run; long commands run detached.
+ * Never throws.
  */
 export async function handleUpdate(rt: ChannelRuntime, update: Update): Promise<void> {
 	try {
@@ -74,16 +83,13 @@ async function dispatch(scope: MessageScope): Promise<void> {
 		case "text":
 			await admitContent(scope, classified.text);
 			return;
-		case "photo":
-		case "document":
+		case "file":
 			return handleAttachment(scope);
 		case "voice":
 			return handleVoice(scope);
 		default:
-			return replyOnce(
-				scope,
-				`This kind of message (${classified.what}) is not supported. Send text, a photo, a document or voice.`,
-			);
+			await admitContent(scope, otherNote(scope.message));
+			return;
 	}
 }
 
@@ -130,34 +136,50 @@ async function admitContent(scope: MessageScope, text: string): Promise<boolean>
 	return result === "admitted";
 }
 
-/** Record the key, then reply once: a crash in between loses the reply rather than repeating it. */
-async function replyOnce(scope: MessageScope, text: string): Promise<void> {
-	if (await recordKey(scope.conversation, scope.key, BG)) await reply(scope, text);
-}
-
-async function handleAttachment(scope: MessageScope): Promise<void> {
+/** Save the file and tell the model where it is; a file that cannot be fetched is still reported to the model. */
+async function handleAttachment(scope: MessageScope, note?: string): Promise<void> {
 	const attachment = attachmentOf(scope.message);
-	if (attachment === undefined) return replyOnce(scope, "Could not read this attachment.");
+	if (attachment === undefined) {
+		await admitContent(scope, otherNote(scope.message));
+		return;
+	}
+	const caption = scope.message.caption;
 	const limit = scope.rt.downloadLimit;
 	if ((attachment.fileSize ?? 0) > limit) {
-		return replyOnce(scope, `File is too big for bots (max ${Math.round(limit / MB)} MB).`);
+		const reason = `bots can download files up to ${Math.round(limit / MB)} MB`;
+		await admitContent(scope, missingAttachmentNote({ attachment, reason, caption }));
+		return;
 	}
 	const path = inboxPath(scope.rt.workdir, scope.rt.now(), scope.messageId, attachment.name);
-	try {
-		await downloadToFile({ port: scope.rt.port, fileId: attachment.fileId, limit }, path);
-	} catch (error) {
-		scope.rt.log.warn("download_failed", { chat: scope.chatId, error: errorSummary(error) });
-		return replyOnce(
-			scope,
-			error instanceof DownloadError ? `Could not save the file: ${error.message}.` : "Could not save the file.",
-		);
+	const failure = await saveAttachment(scope, attachment, path);
+	if (failure !== undefined) {
+		await admitContent(scope, missingAttachmentNote({ attachment, reason: failure, caption }));
+		return;
 	}
 	const isImage = attachment.kind === "photo" || (await sniffImage(path));
-	const caption = scope.message.caption;
+	const kind = attachment.kind;
 	await admitContent(
 		scope,
-		attachmentNote({ kind: attachment.kind, workdir: scope.rt.workdir, path, isImage, caption }),
+		attachmentNote({
+			kind,
+			workdir: scope.rt.workdir,
+			path,
+			isImage,
+			caption,
+			...(note === undefined ? {} : { note }),
+		}),
 	);
+}
+
+/** Download into the inbox; returns the reason when it fails. */
+async function saveAttachment(scope: MessageScope, attachment: Attachment, path: string): Promise<string | undefined> {
+	try {
+		await downloadToFile({ port: scope.rt.port, fileId: attachment.fileId, limit: scope.rt.downloadLimit }, path);
+		return undefined;
+	} catch (error) {
+		scope.rt.log.warn("download_failed", { chat: scope.chatId, error: errorSummary(error) });
+		return error instanceof DownloadError ? error.message : "the download failed";
+	}
 }
 
 async function sniffImage(path: string): Promise<boolean> {
@@ -171,31 +193,33 @@ async function sniffImage(path: string): Promise<boolean> {
 	}
 }
 
+/**
+ * Speech becomes text when speech-to-text is configured and works. Otherwise the audio is saved like any other file
+ * and the model is told why there is no transcript.
+ */
 async function handleVoice(scope: MessageScope): Promise<void> {
-	const voice = voiceOf(scope.message);
+	const voice = attachmentOf(scope.message);
 	const stt = scope.rt.stt;
-	if (voice === undefined) return replyOnce(scope, "Could not read this voice message.");
-	if (stt === undefined) return replyOnce(scope, "Voice messages are not configured (DEEPGRAM_API_KEY).");
-	if ((voice.fileSize ?? 0) > scope.rt.downloadLimit)
-		return replyOnce(scope, "Voice message is too big for bots (max 20 MB).");
-	const transcript = await transcribe(scope, stt, voice.fileId, voice.mime);
-	if (transcript === undefined) return;
-	if (transcript.text === "") return replyOnce(scope, "Could not recognize speech.");
-	const lang = transcript.language === undefined ? "" : `, lang=${transcript.language}`;
+	if (voice === undefined || stt === undefined) {
+		return handleAttachment(scope, "No transcript: speech-to-text is not configured (DEEPGRAM_API_KEY).");
+	}
+	if ((voice.fileSize ?? 0) > scope.rt.downloadLimit) return handleAttachment(scope);
+	const result = await transcribe(scope, stt, voice.fileId, voice.mime ?? "audio/ogg");
+	if (typeof result === "string") return handleAttachment(scope, `No transcript: ${result}`);
+	const lang = result.language === undefined ? "" : `, lang=${result.language}`;
 	// Echo only once admitted: a redelivered voice message (shutdown or crash before admit) is not echoed twice.
-	if (await admitContent(scope, `[voice transcript${lang}] ${transcript.text}`))
-		await reply(scope, `🎙 ${truncate(transcript.text, 4000)}`);
+	if (await admitContent(scope, `[voice transcript${lang}] ${result.text}`))
+		await reply(scope, `🎙 ${truncate(result.text, 4000)}`);
 }
 
+/** The transcript, or the reason there is none. */
 async function transcribe(scope: MessageScope, stt: Stt, fileId: string, mime: string) {
 	try {
 		const bytes = await downloadToMemory({ port: scope.rt.port, fileId, limit: scope.rt.downloadLimit });
-		return await stt.transcribe(bytes, mime, AbortSignal.timeout(90_000));
+		const transcript = await stt.transcribe(bytes, mime, AbortSignal.timeout(90_000));
+		return transcript.text === "" ? "no speech was recognized." : transcript;
 	} catch (error) {
 		scope.rt.log.warn("voice_failed", { chat: scope.chatId, error: errorSummary(error) });
-		const text =
-			error instanceof SttError ? sttFailureText(error.kind) : "Voice: could not download the audio, try again.";
-		await replyOnce(scope, text);
-		return undefined;
+		return error instanceof SttError ? sttFailureText(error.kind) : "the audio could not be downloaded.";
 	}
 }
