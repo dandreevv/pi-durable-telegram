@@ -97,3 +97,44 @@ test("credential store: the file mutex excludes another process", async () => {
 		await cleanup();
 	}
 });
+
+test("credential store: waits for pi's own lock on a shared auth.json (proper-lockfile) and keeps pi's write", async () => {
+	const { dir, cleanup } = await tempDir();
+	try {
+		const path = join(dir, "agent", "auth.json");
+		const store = new FileCredentialStore(path);
+		await store.modify("openai-codex", async () => oauth(1));
+		// pi holds its lock while it refreshes a token: same file, same lock path, the way pi's AuthStorage takes it.
+		const lockfile = (await import("proper-lockfile")).default;
+		const release = await lockfile.lock(path, { realpath: false, stale: 30_000 });
+		let ours = false;
+		const pending = store.modify("anthropic", async () => {
+			ours = true;
+			return oauth(2);
+		});
+		await new Promise((resolve) => setTimeout(resolve, 150));
+		assert.equal(ours, false, "the daemon must not write while pi holds the lock");
+		const piWrite = JSON.parse(readFileSync(path, "utf8")) as Record<string, Credential>;
+		await writeFile(path, `${JSON.stringify({ ...piWrite, "openai-codex": oauth(9) })}\n`);
+		await release();
+		await pending;
+		const file = JSON.parse(readFileSync(path, "utf8")) as Record<string, Credential>;
+		assert.deepEqual(file["openai-codex"], oauth(9), "pi's refreshed token survives the daemon's write");
+		assert.deepEqual(file.anthropic, oauth(2));
+	} finally {
+		await cleanup();
+	}
+});
+
+test("credential store: creates a missing shared file with mode 600 before locking it", async () => {
+	const { dir, cleanup } = await tempDir();
+	try {
+		const path = join(dir, "fresh", "auth.json");
+		const store = new FileCredentialStore(path);
+		await store.delete("anthropic");
+		assert.equal(statSync(path).mode & 0o777, 0o600);
+		assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), {});
+	} finally {
+		await cleanup();
+	}
+});

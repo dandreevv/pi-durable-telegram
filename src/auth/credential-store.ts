@@ -1,14 +1,22 @@
 import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
-import { withFileMutex } from "./file-mutex.ts";
+import lockfile from "proper-lockfile";
+
+/** Same lock as pi's own auth storage (proper-lockfile on the file, 30 s stale), so pi and the daemon can share it. */
+const LOCK_OPTIONS = {
+	realpath: false,
+	stale: 30_000,
+	retries: { retries: 300, factor: 1.2, minTimeout: 10, maxTimeout: 200 },
+} as const;
 
 type CredentialFile = Record<string, Credential>;
 
 /**
  * File-backed pi-ai credential store: JSON `{ [providerId]: Credential }`, mode 0600. Every read goes to the file,
- * because an OAuth refresh rotates the refresh token and another process (`login`) may have written it. Writes are
- * serialized per provider in this process and across processes by `<file>.lock`, then written atomically.
+ * because an OAuth refresh rotates the refresh token and another process (pi, `login`) may have written it. Writes are
+ * serialized per provider in this process and across processes with pi's own lock (proper-lockfile on the file), then
+ * written atomically. That makes it safe to share pi's `~/.pi/agent/auth.json`.
  */
 export class FileCredentialStore implements CredentialStore {
 	readonly path: string;
@@ -69,8 +77,26 @@ export class FileCredentialStore implements CredentialStore {
 
 	async #locked<T>(options: AuthOperationOptions | undefined, fn: () => Promise<T>): Promise<T> {
 		await mkdir(dirname(this.path), { recursive: true, mode: 0o700 });
-		const signal = options?.signal;
-		return withFileMutex(`${this.path}.lock`, fn, signal === undefined ? {} : { signal });
+		await this.#ensureFile();
+		options?.signal?.throwIfAborted();
+		const release = await lockfile.lock(this.path, LOCK_OPTIONS);
+		try {
+			options?.signal?.throwIfAborted();
+			return await fn();
+		} finally {
+			await release().catch(() => undefined);
+		}
+	}
+
+	/** proper-lockfile locks an existing file; create an empty store first, as pi does. */
+	async #ensureFile(): Promise<void> {
+		try {
+			const handle = await open(this.path, "wx", 0o600);
+			await handle.writeFile("{}\n");
+			await handle.close();
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+		}
 	}
 
 	async #load(): Promise<CredentialFile> {
