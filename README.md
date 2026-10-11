@@ -15,7 +15,7 @@
 [![Node 22.19+](https://img.shields.io/badge/node-%E2%89%A522.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Telegram](https://img.shields.io/badge/Telegram-bot-26A5E4?logo=telegram&logoColor=white)](https://core.telegram.org/bots)
 
-[Get started](#get-started-in-three-steps) · [Why](#why) · [How it works](#how-it-works) · [Durability](#what-durable-means-here) · [Commands](#telegram-commands) · [Security](#security) · [FAQ](#faq)
+[Get started](#get-started-with-one-command) · [Why](#why) · [How it works](#how-it-works) · [Durability](#what-durable-means-here) · [Commands](#telegram-commands) · [Security](#security) · [FAQ](#faq)
 
 </div>
 
@@ -27,29 +27,23 @@ server, keeps every conversation in SQLite, and survives crashes and restarts: a
 process comes back, and its answer still reaches your chat. You write to the bot from your phone; the agent works on
 the server with a real shell, files and your instructions.
 
-## Get started in three steps
+## Get started with one command
 
-On your server:
+On your server, as the user the agent should work as:
 
-1. **Install pi.**
+```sh
+curl -fsSL https://raw.githubusercontent.com/smixs/pi-durable-telegram/main/install.sh | bash
+```
 
-   ```sh
-   curl -fsSL https://pi.dev/install.sh | sh
-   ```
+The script says what it will do and asks before it starts. Then it:
 
-2. **Log in to any provider pi supports.** Start `pi` and run `/login`: a Claude or ChatGPT subscription, an API key,
-   whatever you like. The agent will use this login and pi's default model.
+1. installs the official pi from [pi.dev](https://pi.dev) (skipped if you already have it);
+2. opens pi so you log in with `/login` to any provider pi supports: a Claude or ChatGPT subscription, an API key;
+3. asks for a bot token from [@BotFather](https://t.me/BotFather) and finds your Telegram id when you message the bot;
+4. installs the daemon, starts it as a systemd service and waits until the bot answers you.
 
-3. **Run the setup skill.**
-
-   ```sh
-   pi install git:github.com/smixs/pi-durable-telegram
-   ```
-
-   Then in pi: `/skill:pi-durable-telegram`. It asks for a bot token from [@BotFather](https://t.me/BotFather), finds
-   your Telegram id when you message the bot, installs the service, and checks that the bot answers.
-
-That's it: write to your bot.
+Run the same command again to update. Already working in pi? `pi install git:github.com/smixs/pi-durable-telegram`
+and `/skill:pi-durable-telegram` do the same from inside pi.
 
 ## Why
 
@@ -127,7 +121,7 @@ adds the Telegram side of the same promise:
 
 ## Manual install
 
-Without the skill, step by step. You need a Linux server with systemd and Node.js 22.19 or newer, a bot token from
+Without the installer, step by step. You need a Linux server with systemd and Node.js 22.19 or newer, a bot token from
 [@BotFather](https://t.me/BotFather), your numeric Telegram user id (from [@userinfobot](https://t.me/userinfobot)) and
 a model provider account.
 
@@ -146,8 +140,9 @@ a model provider account.
    DEEPGRAM_API_KEY=...            # optional, for voice
    ```
 
-3. **Log in.** If pi is logged in on this machine, skip this: the daemon shares pi's `~/.pi/agent/auth.json` and its
-   default provider and model. Otherwise run the command below, open the printed URL in any browser, sign in and paste
+3. **Log in.** If pi is logged in on this machine, skip this: the daemon shares pi's `~/.pi/agent/auth.json`. Put
+   the provider and model you want into the env file as `PI_PROVIDER` and `PI_MODEL` (a default saved in pi's
+   settings is picked up on its own). Otherwise run the command below, open the printed URL in any browser, sign in and paste
    the code back. Credentials refresh automatically.
 
    ```sh
