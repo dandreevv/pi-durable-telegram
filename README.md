@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="assets/header.webp" alt="pi-durable-telegram: a small server on the horizon receiving a paper airplane, an always-on durable pi agent you reach from Telegram" width="100%">
+<img src="assets/header.webp" alt="pi durable via telegram: a small server on the horizon receiving a paper airplane, an always-on durable pi agent you reach from Telegram" width="100%">
 
 # pi-durable-telegram
 
