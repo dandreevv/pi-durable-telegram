@@ -15,7 +15,7 @@
 [![Node 22.19+](https://img.shields.io/badge/node-%E2%89%A522.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Telegram](https://img.shields.io/badge/Telegram-bot-26A5E4?logo=telegram&logoColor=white)](https://core.telegram.org/bots)
 
-[Зачем](#зачем) · [Как устроено](#как-устроено) · [Быстрый старт](#быстрый-старт) · [Что значит durable](#что-значит-durable) · [Команды](#команды-в-telegram) · [Безопасность](#безопасность) · [Вопросы](#частые-вопросы)
+[Начать за три шага](#начать-за-три-шага) · [Зачем](#зачем) · [Как устроено](#как-устроено) · [Что значит durable](#что-значит-durable) · [Команды](#команды-в-telegram) · [Безопасность](#безопасность) · [Вопросы](#частые-вопросы)
 
 </div>
 
@@ -27,11 +27,29 @@ durable-движка агентов из проекта pi. Он запуска�
 продолжится с того же места, а ответ всё равно придёт в чат. Ты пишешь боту с телефона, агент работает на сервере:
 настоящий shell, файлы и твои инструкции.
 
-```sh
-npm install -g pi-durable-telegram
-pi-durable-telegram login anthropic
-pi-durable-telegram run --env-file ~/.config/pi-durable-telegram/env
-```
+## Начать за три шага
+
+На своём сервере:
+
+1. **Поставь pi.**
+
+   ```sh
+   curl -fsSL https://pi.dev/install.sh | sh
+   ```
+
+2. **Войди к любому провайдеру, которого поддерживает pi.** Запусти `pi` и выполни `/login`: подписка Claude или
+   ChatGPT, ключ API, что тебе удобно. Агент возьмёт этот вход и модель pi по умолчанию.
+
+3. **Запусти скилл установки.**
+
+   ```sh
+   pi install npm:pi-durable-telegram
+   ```
+
+   Дальше в pi: `/skill:pi-durable-telegram`. Он спросит токен бота от [@BotFather](https://t.me/BotFather), сам найдёт
+   твой id в Telegram, когда ты напишешь боту, поставит службу и проверит, что бот отвечает.
+
+Всё, пиши боту.
 
 ## Зачем
 
@@ -84,8 +102,9 @@ flowchart LR
   службы. Секреты из окружения shell убраны.
 - **Инструкции.** `<workdir>/AGENTS.md` добавляется в системный промпт и перечитывается при изменении: напиши там,
   что есть на сервере и что трогать нельзя.
-- **Любая модель pi-ai.** По умолчанию Anthropic `claude-opus-5-5` с рассуждением `high`. Другой провайдер задаётся
-  через `PI_PROVIDER` и `PI_MODEL`.
+- **Любая модель pi.** По умолчанию та, что стоит по умолчанию в pi (`defaultProvider`, `defaultModel`,
+  `defaultThinkingLevel` в его настройках), иначе Anthropic `claude-opus-5-5` с рассуждением `high`. `PI_PROVIDER`,
+  `PI_MODEL` и `PI_THINKING` задают её явно.
 
 </details>
 
@@ -105,9 +124,9 @@ pi-durable записывает в базу каждый ход модели, в
 | Ты пишешь, пока агент занят | Сообщение надёжно встаёт в очередь и получает ответ после текущего хода |
 | Telegram какое-то время недоступен | Правки и отправки повторяются с паузами, с учётом `retry_after` |
 
-## Быстрый старт
+## Установка вручную
 
-Нужны Linux-сервер с systemd и Node.js 22.19 или новее, токен бота от [@BotFather](https://t.me/BotFather), твой
+Без скилла, по шагам. Нужны Linux-сервер с systemd и Node.js 22.19 или новее, токен бота от [@BotFather](https://t.me/BotFather), твой
 числовой id в Telegram (его покажет [@userinfobot](https://t.me/userinfobot)) и аккаунт у провайдера модели.
 
 1. **Установка.**
@@ -125,8 +144,9 @@ pi-durable записывает в базу каждый ход модели, в
    DEEPGRAM_API_KEY=...            # необязательно, для голосовых
    ```
 
-3. **Вход.** По SSH запусти команду ниже, открой напечатанную ссылку в любом браузере, войди и вставь код обратно.
-   Учётные данные лягут в `<PI_DATA_DIR>/auth.json` (права 600) и будут обновляться сами.
+3. **Вход.** Если на этой машине pi уже вошёл к провайдеру, шаг пропусти: демон берёт файл входа pi
+   `~/.pi/agent/auth.json`, его провайдера и модель по умолчанию. Иначе запусти команду ниже, открой напечатанную ссылку
+   в любом браузере, войди и вставь код обратно. Учётные данные будут обновляться сами.
 
    ```sh
    pi-durable-telegram login anthropic --env-file ~/.config/pi-durable-telegram/env
@@ -150,17 +170,6 @@ systemd не читает `PATH` твоего shell. Если Node стоит ч
 > **О подписках.** Условия Anthropic могут ограничивать вход по подписке Claude через OAuth в сторонних программах.
 > Прочитай их сам, ответственность на тебе. Ключ API (`ANTHROPIC_API_KEY`) тоже работает.
 
-### Установка через pi
-
-Пакет одновременно [пакет pi](https://pi.dev/packages) со скиллом установки. Поставь его в pi на ноутбуке и попроси pi
-развернуть агента на сервере: он сам проведёт по шагам: бот, вход, systemd, живая проверка по SSH.
-
-```sh
-pi install npm:pi-durable-telegram
-```
-
-Дальше в pi: `/skill:pi-durable-telegram` или просто «подними мне durable-агента в Telegram на my-server».
-
 ## Команды в Telegram
 
 | Команда | Что делает |
@@ -182,11 +191,12 @@ pi install npm:pi-durable-telegram
 |---|---|---|---|
 | `TELEGRAM_BOT_TOKEN` | да | | Токен бота от @BotFather |
 | `TELEGRAM_ALLOWED_USER_IDS` | да | | Id пользователей Telegram через запятую, которым бот отвечает |
-| `PI_PROVIDER` | нет | `anthropic` | Провайдер pi-ai |
-| `PI_MODEL` | нет | `claude-opus-5-5` | Модель провайдера |
-| `PI_THINKING` | нет | `high` | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` или `max`; сверяется с моделью |
+| `PI_PROVIDER` | нет | как в pi, иначе `anthropic` | Провайдер pi-ai |
+| `PI_MODEL` | нет | как в pi, иначе `claude-opus-5-5` | Модель провайдера |
+| `PI_THINKING` | нет | как в pi, иначе `high` | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` или `max`; сверяется с моделью |
 | `PI_WORKDIR` | нет | текущая папка | Рабочая папка агента |
-| `PI_DATA_DIR` | нет | `$XDG_STATE_HOME/pi-durable-telegram` или `~/.local/state/pi-durable-telegram` | База SQLite, учётные данные, замок |
+| `PI_DATA_DIR` | нет | `$XDG_STATE_HOME/pi-durable-telegram` или `~/.local/state/pi-durable-telegram` | База SQLite и замок |
+| `PI_AUTH_FILE` | нет | `~/.pi/agent/auth.json` pi (или `$PI_CODING_AGENT_DIR/auth.json`) | Файл входа, общий с pi, под замком pi. Файл `<PI_DATA_DIR>/auth.json` от старой версии работает, пока у pi своего нет |
 | `PI_INSTRUCTIONS` | нет | `<PI_WORKDIR>/AGENTS.md` | Инструкции в системный промпт, перечитываются при изменении |
 | `PI_CONTEXT_CAP` | нет | окно модели | Сжимать контекст после стольких токенов (в фоне начиная с трёх четвертей) |
 | `DEEPGRAM_API_KEY` | нет | | Включает расшифровку голосовых |
@@ -243,12 +253,13 @@ pi-durable-telegram run --env-file ~/.config/pi-durable-telegram/env
 падения. Подробнее в [анонсе](https://earendil.com/posts/pi-durable/).
 
 **Можно ли использовать подписку Claude Pro или Max?**
-Вход идёт через штатный OAuth Anthropic из pi-ai без изменений, так что `login anthropic` входит твоим аккаунтом Claude.
+Войди через `/login` в pi (или `pi-durable-telegram login anthropic`): используется штатный OAuth Anthropic из pi-ai
+без изменений.
 Разрешено ли это для сторонних программ, решают условия Anthropic, проверь их. Ключ API тоже подходит.
 
 **Какие модели работают?**
-Любой провайдер pi-ai. По умолчанию стоит проверенная Anthropic `claude-opus-5-5`; для других задай `PI_PROVIDER`,
-`PI_MODEL` и `PI_THINKING`.
+Любой провайдер, которого поддерживает pi. По умолчанию агент берёт провайдера и модель pi; проверенный путь:
+Anthropic `claude-opus-5-5`. `PI_PROVIDER`, `PI_MODEL` и `PI_THINKING` задают их явно.
 
 **Нужны ли домен, HTTPS или вебхук?**
 Нет. Демон сам опрашивает Telegram Bot API со своего сервера.
@@ -261,8 +272,8 @@ pi-durable-telegram run --env-file ~/.config/pi-durable-telegram/env
 В этой версии нет, только личные чаты.
 
 **Где хранятся данные?**
-На твоём сервере: база SQLite и учётные данные в `PI_DATA_DIR` (по умолчанию `~/.local/state/pi-durable-telegram`),
-файлы в `<workdir>/inbox/`. Запросы к модели уходят выбранному провайдеру, голос уходит в Deepgram, если он включён.
+На твоём сервере: база SQLite в `PI_DATA_DIR` (по умолчанию `~/.local/state/pi-durable-telegram`), учётные данные в
+`auth.json` pi, файлы в `<workdir>/inbox/`. Запросы к модели уходят выбранному провайдеру, голос уходит в Deepgram, если он включён.
 
 **Сколько нужно памяти?**
 В systemd-юните из пакета предел 1 ГБ. На сервере автора демон в простое занимает около 65 МБ, пик был около 230 МБ;
