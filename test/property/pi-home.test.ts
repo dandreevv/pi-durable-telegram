@@ -65,6 +65,13 @@ test("pi settings: provider, model and thinking; junk and missing files give not
 	);
 });
 
+const isSet = (value: string | undefined) => (value?.trim() ?? "") !== "";
+
+function expectedModel(envModel: string | undefined, provider: string | undefined, piHasModel: boolean) {
+	if (isSet(envModel)) return envModel;
+	return piHasModel && provider === "anthropic" ? "m-pi" : envModel;
+}
+
 test("P-pi-defaults: set PI_* variables win; pi's model only rides with pi's provider", (t) => {
 	const value = fc.option(fc.constantFrom("anthropic", "openai-codex", "  "), { nil: undefined });
 	const model = fc.option(fc.constantFrom("m-env", ""), { nil: undefined });
@@ -72,11 +79,8 @@ test("P-pi-defaults: set PI_* variables win; pi's model only rides with pi's pro
 		const piEnv: Record<string, string> = { PI_PROVIDER: "anthropic", PI_THINKING: "high" };
 		if (piHasModel) piEnv.PI_MODEL = "m-pi";
 		const out = withPiDefaults({ PI_PROVIDER: envProvider, PI_MODEL: envModel }, piEnv);
-		const providerSet = (envProvider?.trim() ?? "") !== "";
-		assert.equal(out.PI_PROVIDER, providerSet ? envProvider : "anthropic");
-		if ((envModel?.trim() ?? "") !== "") assert.equal(out.PI_MODEL, envModel);
-		else if (piHasModel && out.PI_PROVIDER === "anthropic") assert.equal(out.PI_MODEL, "m-pi");
-		else assert.equal(out.PI_MODEL, envModel);
+		assert.equal(out.PI_PROVIDER, isSet(envProvider) ? envProvider : "anthropic");
+		assert.equal(out.PI_MODEL, expectedModel(envModel, out.PI_PROVIDER, piHasModel));
 		assert.equal(out.PI_THINKING, "high");
 	});
 });
