@@ -23,6 +23,8 @@ ExecStart=/usr/bin/env pi-durable-telegram run --env-file %h/.config/pi-durable-
 Environment=NODE_ENV=production
 Restart=always
 RestartSec=3
+# Exit codes 2 (bad config), 3 (data dir in use) and 4 (not logged in) need a person, not a restart loop.
+RestartPreventExitStatus=2 3 4
 TimeoutStopSec=30
 KillMode=mixed
 MemoryMax=1G
