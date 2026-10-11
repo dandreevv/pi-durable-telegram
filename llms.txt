@@ -16,10 +16,14 @@ Key facts:
 
 ## Docs
 
-- [README](https://github.com/smixs/pi-durable-telegram/blob/main/README.md): what it is, quick start, configuration, security, FAQ, library API
+- [README](https://github.com/smixs/pi-durable-telegram/blob/main/README.md): what it is in plain language, one-command install, commands, FAQ, comparison
 - [README in Russian](https://github.com/smixs/pi-durable-telegram/blob/main/README.ru.md)
+- [Install, update, remove](https://github.com/smixs/pi-durable-telegram/blob/main/docs/install.md): what the installer does, manual install, exit codes
+- [Configuration](https://github.com/smixs/pi-durable-telegram/blob/main/docs/configuration.md): every environment variable
+- [How it works](https://github.com/smixs/pi-durable-telegram/blob/main/docs/how-it-works.md): architecture, features in detail, what happens on each failure
+- [Security in detail](https://github.com/smixs/pi-durable-telegram/blob/main/docs/security.md) and the [security policy](https://github.com/smixs/pi-durable-telegram/blob/main/SECURITY.md)
+- [Library API and development](https://github.com/smixs/pi-durable-telegram/blob/main/docs/library.md)
 - [Setup skill for pi](https://github.com/smixs/pi-durable-telegram/blob/main/skills/pi-durable-telegram/SKILL.md): step-by-step server setup an agent can follow
-- [Security policy](https://github.com/smixs/pi-durable-telegram/blob/main/SECURITY.md)
 - [Changelog](https://github.com/smixs/pi-durable-telegram/blob/main/CHANGELOG.md)
 
 ## Related
