@@ -1,0 +1,27 @@
+# pi-durable-telegram
+
+> An always-on, durable pi agent on your own server that you talk to in Telegram. Open-source (MIT) Telegram gateway for pi-durable (`@earendil-works/pi-durable`), the durable agent harness from the pi project. Conversations live in SQLite; after a crash or restart an unfinished run resumes and its answer is still delivered to the chat, exactly once.
+
+Key facts:
+
+- Package: `pi-durable-telegram` on npm; CLI `pi-durable-telegram run | login <provider>`; also a library (`createTelegramChannel`) and a pi package with a setup skill (`pi install npm:pi-durable-telegram`).
+- Runtime: Node.js 22.19+, Linux with systemd (user service), long polling (no webhook, domain or HTTPS needed).
+- Model: any pi-ai provider; default Anthropic `claude-opus-5-5`, thinking `high`, login via pi-ai's Anthropic OAuth or an API key.
+- Telegram: private chats with allow-listed user ids only; streaming answers by editing one message; queueing while busy; commands `/new`, `/stop`, `/compact`, `/status`, `/help`.
+- Files: photos and documents up to 20 MB saved to `<workdir>/inbox/`; the agent sends files back (up to 50 MB) with `telegram_send_file`; voice notes transcribed with Deepgram nova-3 when `DEEPGRAM_API_KEY` is set.
+- Tools: `bash`, `read` (text and images), `write`, `edit` in `PI_WORKDIR` under the service user; secrets are stripped from the shell environment.
+- Durability: each model turn, tool call and Telegram delivery step is committed before it is shown; redelivered Telegram updates are deduplicated; a data-directory lock keeps one owner per storage.
+
+## Docs
+
+- [README](https://github.com/smixs/pi-durable-telegram/blob/main/README.md): what it is, quick start, configuration, security, FAQ, library API
+- [README in Russian](https://github.com/smixs/pi-durable-telegram/blob/main/README.ru.md)
+- [Setup skill for pi](https://github.com/smixs/pi-durable-telegram/blob/main/skills/pi-durable-telegram/SKILL.md): step-by-step server setup an agent can follow
+- [Security policy](https://github.com/smixs/pi-durable-telegram/blob/main/SECURITY.md)
+- [Changelog](https://github.com/smixs/pi-durable-telegram/blob/main/CHANGELOG.md)
+
+## Related
+
+- [pi-durable announcement](https://earendil.com/posts/pi-durable/)
+- [pi-durable source](https://github.com/earendil-works/pi/tree/main/packages/durable)
+- [pi coding agent](https://pi.dev)
