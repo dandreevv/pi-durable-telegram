@@ -15,7 +15,7 @@
 [![Node 22.19+](https://img.shields.io/badge/node-%E2%89%A522.19-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Telegram](https://img.shields.io/badge/Telegram-bot-26A5E4?logo=telegram&logoColor=white)](https://core.telegram.org/bots)
 
-[Why](#why) · [How it works](#how-it-works) · [Quick start](#quick-start) · [Durability](#what-durable-means-here) · [Commands](#telegram-commands) · [Security](#security) · [FAQ](#faq)
+[Get started](#get-started-in-three-steps) · [Why](#why) · [How it works](#how-it-works) · [Durability](#what-durable-means-here) · [Commands](#telegram-commands) · [Security](#security) · [FAQ](#faq)
 
 </div>
 
@@ -27,11 +27,29 @@ server, keeps every conversation in SQLite, and survives crashes and restarts: a
 process comes back, and its answer still reaches your chat. You write to the bot from your phone; the agent works on
 the server with a real shell, files and your instructions.
 
-```sh
-npm install -g pi-durable-telegram
-pi-durable-telegram login anthropic
-pi-durable-telegram run --env-file ~/.config/pi-durable-telegram/env
-```
+## Get started in three steps
+
+On your server:
+
+1. **Install pi.**
+
+   ```sh
+   curl -fsSL https://pi.dev/install.sh | sh
+   ```
+
+2. **Log in to any provider pi supports.** Start `pi` and run `/login`: a Claude or ChatGPT subscription, an API key,
+   whatever you like. The agent will use this login and pi's default model.
+
+3. **Run the setup skill.**
+
+   ```sh
+   pi install npm:pi-durable-telegram
+   ```
+
+   Then in pi: `/skill:pi-durable-telegram`. It asks for a bot token from [@BotFather](https://t.me/BotFather), finds
+   your Telegram id when you message the bot, installs the service, and checks that the bot answers.
+
+That's it: write to your bot.
 
 ## Why
 
@@ -85,8 +103,9 @@ checkpointed tasks, and the answer streams back into one Telegram message that i
   access. Secrets are stripped from the shell's environment.
 - **Instructions.** `<workdir>/AGENTS.md` is added to the system prompt and re-read when it changes: tell the agent
   what lives on the server and what it must not touch.
-- **Any pi-ai model.** Default is Anthropic `claude-opus-5-5` with thinking `high`; set `PI_PROVIDER` and `PI_MODEL`
-  for another provider.
+- **Any pi-ai model.** The model pi uses by default (`defaultProvider`, `defaultModel`, `defaultThinkingLevel` in
+  pi's settings), else Anthropic `claude-opus-5-5` with thinking `high`; `PI_PROVIDER`, `PI_MODEL` and `PI_THINKING`
+  override it.
 
 </details>
 
@@ -106,9 +125,9 @@ adds the Telegram side of the same promise:
 | You write while the agent is busy | The message is queued durably and answered after the current run |
 | Telegram is unreachable for a while | Edits and sends retry with backoff, honouring `retry_after` |
 
-## Quick start
+## Manual install
 
-You need a Linux server with systemd and Node.js 22.19 or newer, a bot token from
+Without the skill, step by step. You need a Linux server with systemd and Node.js 22.19 or newer, a bot token from
 [@BotFather](https://t.me/BotFather), your numeric Telegram user id (from [@userinfobot](https://t.me/userinfobot)) and
 a model provider account.
 
@@ -127,8 +146,9 @@ a model provider account.
    DEEPGRAM_API_KEY=...            # optional, for voice
    ```
 
-3. **Log in.** Over SSH, run the command below, open the printed URL in any browser, sign in and paste the code back.
-   Credentials go to `<PI_DATA_DIR>/auth.json` (mode 600) and refresh automatically.
+3. **Log in.** If pi is logged in on this machine, skip this: the daemon shares pi's `~/.pi/agent/auth.json` and its
+   default provider and model. Otherwise run the command below, open the printed URL in any browser, sign in and paste
+   the code back. Credentials refresh automatically.
 
    ```sh
    pi-durable-telegram login anthropic --env-file ~/.config/pi-durable-telegram/env
@@ -152,17 +172,6 @@ absolute paths: `<path to node> <npm root -g>/pi-durable-telegram/dist/cli/main.
 > **Note on subscriptions.** Using a Claude subscription through OAuth in third-party tools may be restricted by
 > Anthropic's terms. Check them; using it this way is your responsibility. An API key (`ANTHROPIC_API_KEY`) works too.
 
-### Set it up from pi
-
-The package is also a [pi package](https://pi.dev/packages) with a setup skill. Install it into pi on your laptop and
-ask pi to put the agent on your server; it walks through the bot, login, systemd and a live check over SSH:
-
-```sh
-pi install npm:pi-durable-telegram
-```
-
-Then in pi: `/skill:pi-durable-telegram`, or just ask "set up my durable agent in Telegram on my-server".
-
 ## Telegram commands
 
 | Command | What it does |
@@ -184,11 +193,12 @@ variables win over the file). Invalid values stop the daemon at start with one l
 |---|---|---|---|
 | `TELEGRAM_BOT_TOKEN` | yes | | Bot token from @BotFather |
 | `TELEGRAM_ALLOWED_USER_IDS` | yes | | Comma-separated Telegram user ids allowed to use the bot |
-| `PI_PROVIDER` | no | `anthropic` | pi-ai provider id |
-| `PI_MODEL` | no | `claude-opus-5-5` | Model id of the provider |
-| `PI_THINKING` | no | `high` | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`; checked against the model |
+| `PI_PROVIDER` | no | pi's default, else `anthropic` | pi-ai provider id |
+| `PI_MODEL` | no | pi's default, else `claude-opus-5-5` | Model id of the provider |
+| `PI_THINKING` | no | pi's default, else `high` | `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`; checked against the model |
 | `PI_WORKDIR` | no | current directory | The agent's working directory |
-| `PI_DATA_DIR` | no | `$XDG_STATE_HOME/pi-durable-telegram` or `~/.local/state/pi-durable-telegram` | SQLite storage, credentials, lock |
+| `PI_DATA_DIR` | no | `$XDG_STATE_HOME/pi-durable-telegram` or `~/.local/state/pi-durable-telegram` | SQLite storage and lock |
+| `PI_AUTH_FILE` | no | pi's `~/.pi/agent/auth.json` (or `$PI_CODING_AGENT_DIR/auth.json`) | Credentials file, shared with pi under pi's own lock. A `<PI_DATA_DIR>/auth.json` from an older version is used while pi has none |
 | `PI_INSTRUCTIONS` | no | `<PI_WORKDIR>/AGENTS.md` | Project instructions added to the system prompt; re-read when the file changes |
 | `PI_CONTEXT_CAP` | no | model window | Compact the context once it grows past this many tokens (in the background from three quarters of it) |
 | `DEEPGRAM_API_KEY` | no | | Enables voice transcription |
@@ -255,12 +265,13 @@ conversations, model turns, tool calls and app state in SQLite or JSONL and resu
 See the [announcement](https://earendil.com/posts/pi-durable/).
 
 **Can I use my Claude Pro or Max subscription?**
-pi-ai's own Anthropic OAuth flow is used unchanged, so `login anthropic` signs in with your Claude account. Whether
+Log in with `/login` in pi (or `pi-durable-telegram login anthropic`); pi-ai's own Anthropic OAuth flow is used
+unchanged. Whether
 that is allowed for third-party tools is decided by Anthropic's terms, so check them. An API key works as well.
 
 **Which models work?**
-Any provider pi-ai supports. Anthropic `claude-opus-5-5` is the default and the tested path; set `PI_PROVIDER`,
-`PI_MODEL` and `PI_THINKING` for others.
+Any provider pi supports. By default the agent takes pi's default provider and model; Anthropic `claude-opus-5-5` is
+the tested path. `PI_PROVIDER`, `PI_MODEL` and `PI_THINKING` set it explicitly.
 
 **Do I need a domain, HTTPS or a webhook?**
 No. The daemon long-polls the Telegram Bot API from your server.
@@ -273,8 +284,8 @@ the list gets the same shell access.
 Not in this version; only private chats are served.
 
 **Where is my data?**
-On your server: the SQLite database and credentials in `PI_DATA_DIR` (`~/.local/state/pi-durable-telegram` by
-default), files in `<workdir>/inbox/`. Model requests go to the provider you choose, voice to Deepgram if enabled.
+On your server: the SQLite database in `PI_DATA_DIR` (`~/.local/state/pi-durable-telegram` by default), credentials
+in pi's `auth.json`, files in `<workdir>/inbox/`. Model requests go to the provider you choose, voice to Deepgram if enabled.
 
 **How much memory does it need?**
 The shipped systemd unit caps it at 1 GB. On the author's server it idles around 65 MB and peaked at about 230 MB;
