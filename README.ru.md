@@ -4,7 +4,7 @@
 
 <img src="assets/header.webp" alt="pi durable via telegram: оранжевый бумажный самолётик летит по небу к маленькому серверу с котом на крыше, durable-агент pi, с которым говоришь в Telegram" width="100%">
 
-# pi durable telegram
+# pi-durable telegram
 
 **Агент [pi](https://pi.dev), который всегда работает на твоём сервере, переживает перезапуски и отвечает тебе в Telegram.**
 
