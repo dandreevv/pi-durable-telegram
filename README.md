@@ -59,7 +59,7 @@ More in [docs/install.md](docs/install.md).
 
 | Send this | And the agent will |
 |---|---|
-| any text, photo, file or voice note | work on it and answer |
+| anything: text, a photo, a video, a file, a voice note, a location | work on it and answer |
 | `/new` | start a fresh conversation (the old one is kept) |
 | `/stop` | stop what it is doing right now |
 | `/compact` | shorten a long conversation to its essentials |

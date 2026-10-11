@@ -25,11 +25,14 @@ checkpointed tasks, and the answer streams back into one Telegram message that i
   plain-text fallback if Telegram rejects it.
 - **Queueing.** Messages sent while the agent works are queued and answered in order. Nothing is dropped.
 - **Commands.** `/new`, `/stop`, `/compact`, `/status`, `/help`.
-- **Files.** Photos and documents (up to 20 MB, the Bot API limit) are saved to `<workdir>/inbox/YYYY-MM-DD/`; the
-  agent gets the path and can look at images with `read`. It sends files back with the `telegram_send_file` tool (up
-  to 50 MB).
+- **Anything you send reaches the agent.** Photos, documents, videos, animations and stickers (up to 20 MB, the Bot
+  API limit) are saved to `<workdir>/inbox/YYYY-MM-DD/`; the agent gets the path and decides what to do with the
+  file (it can look at images with `read`). A file that is too big or fails to download is still reported to the
+  agent with its name, size and the reason. A location, contact, poll or any other message without text or a file
+  arrives as its own fields. The agent sends files back with the `telegram_send_file` tool (up to 50 MB).
 - **Voice.** Voice messages, audio and video notes are transcribed with [Deepgram](https://deepgram.com) (`nova-3`,
-  automatic language detection) when `DEEPGRAM_API_KEY` is set.
+  automatic language detection) when `DEEPGRAM_API_KEY` is set. Without a key, or when transcription fails, the audio
+  is saved like any other file and the agent is told why there is no transcript.
 - **Tools.** `read` (text and images), `write`, `edit` and `bash`, working in `PI_WORKDIR` with the service user's
   access. Secrets are stripped from the shell's environment.
 - **Instructions.** `<workdir>/AGENTS.md` is added to the system prompt and re-read when it changes: tell the agent

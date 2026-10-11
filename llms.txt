@@ -10,7 +10,7 @@ Key facts:
 - Runtime: Node.js 22.19+, Linux with systemd (user service), long polling (no webhook, domain or HTTPS needed).
 - Model: any provider pi supports; defaults to pi's default provider, model and thinking level, else Anthropic `claude-opus-5-5` with `high`. Credentials are shared with pi (`~/.pi/agent/auth.json`, under pi's own lock), so `/login` in pi is the only login.
 - Telegram: private chats with allow-listed user ids only; streaming answers by editing one message; queueing while busy; commands `/new`, `/stop`, `/compact`, `/status`, `/help`.
-- Files: photos and documents up to 20 MB saved to `<workdir>/inbox/`; the agent sends files back (up to 50 MB) with `telegram_send_file`; voice notes transcribed with Deepgram nova-3 when `DEEPGRAM_API_KEY` is set.
+- Input: nothing an allowed user sends is refused. Photos, documents, videos, animations and stickers up to 20 MB are saved to `<workdir>/inbox/` and the agent gets the path; a file that cannot be fetched and messages without text or a file (location, contact, poll) are described to the agent; the agent sends files back (up to 50 MB) with `telegram_send_file`; voice notes transcribed with Deepgram nova-3 when `DEEPGRAM_API_KEY` is set.
 - Tools: `bash`, `read` (text and images), `write`, `edit` in `PI_WORKDIR` under the service user; secrets are stripped from the shell environment.
 - Durability: each model turn, tool call and Telegram delivery step is committed before it is shown; redelivered Telegram updates are deduplicated; a data-directory lock keeps one owner per storage.
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Nothing an allowed user sends is refused any more. Videos, animations and stickers are saved and handed to the
+  agent like photos and documents. A file over 20 MB or a failed download is reported to the agent with its name,
+  size and the reason. A location, contact, poll or any other message without text or a file arrives as its own
+  fields. A voice note without a transcript (no Deepgram key, or the speech service failed) is saved as an audio
+  file with the reason, where the bot used to answer "not supported" or "not configured" itself.
+
 ## 0.1.1 (2026-10-11)
 
 - One-command installer: `curl -fsSL https://raw.githubusercontent.com/smixs/pi-durable-telegram/main/install.sh | bash`

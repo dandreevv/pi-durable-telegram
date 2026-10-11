@@ -121,7 +121,7 @@ loginctl enable-linger "$USER"
 | Exit code 4 or "run login" in chat | pi is not logged in to the provider in use: `/login` in pi, then restart the service |
 | 409 Conflict in the journal | Another process polls the same bot token; stop it or use another bot |
 | No answer and nothing in the journal | The sender is not in `TELEGRAM_ALLOWED_USER_IDS`; strangers are ignored silently |
-| Voice says not configured | Add `DEEPGRAM_API_KEY` to the env file and restart |
+| Voice notes arrive as audio files, not text | Add `DEEPGRAM_API_KEY` to the env file and restart |
 
 ## Security
 
