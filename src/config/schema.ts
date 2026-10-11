@@ -1,6 +1,7 @@
 import { isAbsolute, join, resolve } from "node:path";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import type { LogLevel } from "../runtime/log.ts";
+import { piAgentDir, resolveAuthFile } from "./pi-home.ts";
 
 export type Config = {
 	readonly botToken: string;
@@ -10,6 +11,8 @@ export type Config = {
 	readonly thinkingLevel: ModelThinkingLevel;
 	readonly workdir: string;
 	readonly dataDir: string;
+	/** Credentials file: `PI_AUTH_FILE`, else pi's shared `auth.json` (see `resolveAuthFile`). */
+	readonly authFile: string;
 	readonly instructionsPath: string;
 	readonly deepgramApiKey: string | undefined;
 	readonly telegramApiRoot: string;
@@ -30,7 +33,12 @@ export class ConfigError extends Error {
 }
 
 export type Env = Readonly<Record<string, string | undefined>>;
-export type ConfigDefaults = { readonly cwd: string; readonly home: string };
+export type ConfigDefaults = {
+	readonly cwd: string;
+	readonly home: string;
+	/** File existence check for choosing the credentials file; defaults to the real file system. */
+	readonly exists?: (path: string) => boolean;
+};
 
 export const THINKING_LEVELS: readonly ModelThinkingLevel[] = [
 	"off",
@@ -64,6 +72,7 @@ export function parseConfig(env: Env, defaults: ConfigDefaults = { cwd: process.
 	const thinkingLevel = parseEnum("PI_THINKING", env.PI_THINKING, THINKING_LEVELS, DEFAULT_THINKING, out);
 	const workdir = resolvePath(nonEmpty(env.PI_WORKDIR) ?? defaults.cwd, defaults.cwd);
 	const dataDir = dataDirFromEnv(env, defaults);
+	const authFile = authFileFromEnv(env, defaults);
 	const instructionsPath = resolvePath(nonEmpty(env.PI_INSTRUCTIONS) ?? join(workdir, "AGENTS.md"), workdir);
 	const deepgramApiKey = parseOptionalSecret("DEEPGRAM_API_KEY", env.DEEPGRAM_API_KEY, out);
 	const telegramApiRoot = parseApiRoot(env.TELEGRAM_API_ROOT, out);
@@ -78,6 +87,7 @@ export function parseConfig(env: Env, defaults: ConfigDefaults = { cwd: process.
 		thinkingLevel,
 		workdir,
 		dataDir,
+		authFile,
 		instructionsPath,
 		deepgramApiKey,
 		telegramApiRoot,
@@ -102,6 +112,15 @@ function resolvePath(path: string, base: string): string {
 /** `PI_DATA_DIR`, else `$XDG_STATE_HOME/pi-durable-telegram`, else `~/.local/state/pi-durable-telegram`. */
 export function dataDirFromEnv(env: Env, defaults: ConfigDefaults = { cwd: process.cwd(), home: homeOf(env) }): string {
 	return resolvePath(nonEmpty(env.PI_DATA_DIR) ?? defaultDataDir(env, defaults.home), defaults.cwd);
+}
+
+/** The credentials file the daemon and `login` share; see `resolveAuthFile`. */
+export function authFileFromEnv(
+	env: Env,
+	defaults: ConfigDefaults = { cwd: process.cwd(), home: homeOf(env) },
+): string {
+	const paths = { agentDir: piAgentDir(env, defaults.home), dataDir: dataDirFromEnv(env, defaults), cwd: defaults.cwd };
+	return resolveAuthFile(env, paths, defaults.exists);
 }
 
 function defaultDataDir(env: Env, home: string): string {

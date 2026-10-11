@@ -1,15 +1,17 @@
 import { readFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
+import { piAgentDir, piDefaultsEnv, withPiDefaults } from "./pi-home.ts";
 import { type Config, ConfigError, parseConfig } from "./schema.ts";
 
 /**
- * Load an optional env file into `process.env` (real environment wins), parse it, and check the paths that must
- * exist. Throws `ConfigError` with every problem.
+ * Load an optional env file into `process.env` (real environment wins), fill unset `PI_PROVIDER`, `PI_MODEL` and
+ * `PI_THINKING` from pi's settings, parse it, and check the paths that must exist. Throws `ConfigError` with every
+ * problem.
  */
 export async function loadConfig(options: { envFile?: string; env?: NodeJS.ProcessEnv } = {}): Promise<Config> {
 	const env = options.env ?? process.env;
 	if (options.envFile !== undefined) loadEnvFile(options.envFile, env);
-	const config = parseConfig(env);
+	const config = parseConfig(withPiDefaults(env, piDefaultsEnv(piAgentDir(env))));
 	await checkWorkdir(config.workdir);
 	return config;
 }

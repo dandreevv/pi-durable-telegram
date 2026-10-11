@@ -44,7 +44,6 @@ export type OpenAgentDeps = {
 };
 
 export const DATABASE_FILE = "durable.sqlite";
-export const AUTH_FILE = "auth.json";
 
 /**
  * Open the agent: models and auth check, the Telegram channel, the registry (workspace tools, prompt, empty-answer
@@ -106,7 +105,7 @@ function optional<T extends Record<string, unknown>>(values: T): Partial<T> {
 }
 
 async function defaultModels(config: Config, authContext: AuthContext | undefined): Promise<MutableModels> {
-	const credentials = new FileCredentialStore(join(config.dataDir, AUTH_FILE));
+	const credentials = new FileCredentialStore(config.authFile);
 	return createAgentModels({ provider: config.provider, credentials, ...optional({ authContext }) });
 }
 

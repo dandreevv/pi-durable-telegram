@@ -1,17 +1,16 @@
-import { join } from "node:path";
 import { createModels } from "@earendil-works/pi-ai";
-import { AUTH_FILE } from "../agent/open.ts";
 import { loadProvider } from "../agent/providers.ts";
 import { FileCredentialStore } from "../auth/credential-store.ts";
 import { createHeadlessInteraction } from "../auth/interaction.ts";
-import { dataDirFromEnv } from "../config/schema.ts";
+import { authFileFromEnv, dataDirFromEnv } from "../config/schema.ts";
 import { errorSummary } from "../runtime/log.ts";
 import { ensurePrivateDir } from "../runtime/private-dir.ts";
 
 /**
  * `login <provider>`: OAuth when the provider offers it (Anthropic: Claude Pro/Max with the headless copy-code flow),
- * else an API key prompt. Credentials go to `<PI_DATA_DIR>/auth.json` (mode 600) through the same store the daemon
- * uses, so it is safe while the daemon runs. Uses pi-ai's own login flows unchanged.
+ * else an API key prompt. Credentials go to the file the daemon reads (`PI_AUTH_FILE`, else pi's shared `auth.json`;
+ * mode 600) through the same store and lock as the daemon and pi, so it is safe while either runs. Logging in with
+ * pi's own `/login` works just as well. Uses pi-ai's own login flows unchanged.
  */
 export async function runLogin(provider: string, env: NodeJS.ProcessEnv = process.env): Promise<number> {
 	const dataDir = dataDirFromEnv(env);
@@ -21,7 +20,7 @@ export async function runLogin(provider: string, env: NodeJS.ProcessEnv = proces
 		return 2;
 	}
 	await ensurePrivateDir(dataDir);
-	const path = join(dataDir, AUTH_FILE);
+	const path = authFileFromEnv(env);
 	const models = createModels({ credentials: new FileCredentialStore(path) });
 	models.setProvider(providerImpl);
 	const interaction = createHeadlessInteraction();
