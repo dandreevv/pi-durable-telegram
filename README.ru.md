@@ -43,7 +43,7 @@ durable-движка агентов из проекта pi. Он запуска�
 3. **Запусти скилл установки.**
 
    ```sh
-   pi install npm:pi-durable-telegram
+   pi install git:github.com/smixs/pi-durable-telegram
    ```
 
    Дальше в pi: `/skill:pi-durable-telegram`. Он спросит токен бота от [@BotFather](https://t.me/BotFather), сам найдёт
@@ -132,7 +132,7 @@ pi-durable записывает в базу каждый ход модели, в
 1. **Установка.**
 
    ```sh
-   npm install -g pi-durable-telegram
+   npm install -g https://github.com/smixs/pi-durable-telegram/releases/latest/download/pi-durable-telegram.tgz
    ```
 
 2. **Настройка.** Создай `~/.config/pi-durable-telegram/env` с правами 600:

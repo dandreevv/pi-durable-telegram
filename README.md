@@ -43,7 +43,7 @@ On your server:
 3. **Run the setup skill.**
 
    ```sh
-   pi install npm:pi-durable-telegram
+   pi install git:github.com/smixs/pi-durable-telegram
    ```
 
    Then in pi: `/skill:pi-durable-telegram`. It asks for a bot token from [@BotFather](https://t.me/BotFather), finds
@@ -134,7 +134,7 @@ a model provider account.
 1. **Install.**
 
    ```sh
-   npm install -g pi-durable-telegram
+   npm install -g https://github.com/smixs/pi-durable-telegram/releases/latest/download/pi-durable-telegram.tgz
    ```
 
 2. **Configure.** Create `~/.config/pi-durable-telegram/env` with mode 600:
