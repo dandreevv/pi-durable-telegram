@@ -17,3 +17,5 @@ First release.
   tool; voice, audio and video notes transcribed with Deepgram (optional).
 - Workspace tools: `read` (with images), `write`, `edit`, `bash` without the service's secrets in its environment.
 - Anthropic (Claude Pro/Max) login over SSH with pi-ai's OAuth flow; credentials in `<data dir>/auth.json` (mode 600).
+- Pi package: `pi install npm:pi-durable-telegram` adds the `pi-durable-telegram` skill that sets the agent up on a
+  server.

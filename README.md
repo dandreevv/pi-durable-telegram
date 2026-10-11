@@ -111,6 +111,9 @@ loginctl enable-linger "$USER"   # keep it running after you log out
 journalctl --user -u pi-durable-telegram -f
 ```
 
+systemd does not load your shell's `PATH`. If Node comes from nvm or another version manager, edit `ExecStart` to use
+absolute paths: `<path to node> <npm root -g>/pi-durable-telegram/dist/cli/main.js run --env-file ...`.
+
 The unit restarts the service on failure and limits memory to 1 GB. On SIGTERM the daemon stops polling, lets
 in-flight work stop, closes the storage and releases its lock; unfinished runs continue after the next start.
 
@@ -131,6 +134,17 @@ and reach the network. The allow-list of Telegram user ids is the only boundary.
 - The data directory is created (or tightened, if it already exists) with mode 700 at every start; `auth.json` and
   the SQLite database get mode 600.
 - If that matters for you, run the service under a dedicated user that owns only the project directory.
+
+## Set it up from pi
+
+The package is also a [pi package](https://pi.dev/packages) with a setup skill. Install it into pi and ask pi to put
+the agent on your server; it walks through the bot, login, systemd service and a live check over SSH:
+
+```sh
+pi install npm:pi-durable-telegram
+```
+
+Then in pi: `/skill:pi-durable-telegram`, or just ask "set up my durable agent in Telegram on <host>".
 
 ## Use as a library
 
