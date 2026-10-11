@@ -2,7 +2,7 @@
 
 > An always-on, durable pi agent on your own server that you talk to in Telegram. Open-source (MIT) Telegram gateway for pi-durable (`@earendil-works/pi-durable`), the durable agent harness from the pi project. Conversations live in SQLite; after a crash or restart an unfinished run resumes and its answer is still delivered to the chat, exactly once.
 
-Setup in three steps on the server: install pi (`curl -fsSL https://pi.dev/install.sh | sh`), `/login` in pi to any provider, then `pi install git:github.com/smixs/pi-durable-telegram` and run `/skill:pi-durable-telegram`; the skill asks for a bot token, finds the user's Telegram id and installs the systemd service.
+Setup with one command on the server: `curl -fsSL https://raw.githubusercontent.com/smixs/pi-durable-telegram/main/install.sh | bash`. The script installs the official pi from pi.dev, opens pi for `/login` to any provider, asks for a bot token, finds the user's Telegram id from their first message, installs the daemon from the latest GitHub release and starts a systemd user service. Inside pi the same is done by `pi install git:github.com/smixs/pi-durable-telegram` and `/skill:pi-durable-telegram`.
 
 Key facts:
 

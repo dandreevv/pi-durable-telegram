@@ -17,6 +17,8 @@ First release.
   tool; voice, audio and video notes transcribed with Deepgram (optional).
 - Workspace tools: `read` (with images), `write`, `edit`, `bash` without the service's secrets in its environment.
 - `login <provider>` over SSH with pi-ai's OAuth flow, for machines without pi; credentials mode 600.
+- One-command installer: `curl -fsSL https://raw.githubusercontent.com/smixs/pi-durable-telegram/main/install.sh | bash` installs the official pi, opens it for
+  `/login`, connects the bot, takes the model pi runs, installs the daemon and starts the service; run again to update.
 - Pi package: `pi install git:github.com/smixs/pi-durable-telegram` adds the `pi-durable-telegram` skill. Run it in pi on the server: it
   asks for a bot token, finds your Telegram id, installs and checks the systemd service.
 - Shares pi's login and defaults: credentials come from pi's `auth.json` under pi's own lock (`PI_AUTH_FILE`
