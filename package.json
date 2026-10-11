@@ -1,6 +1,6 @@
 {
   "name": "pi-durable-telegram",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Always-on durable pi agent on your server that you talk to in Telegram: a pi-durable Telegram gateway that survives crashes and restarts",
   "license": "MIT",
   "author": "smixs",
@@ -44,7 +44,8 @@
     "LICENSE",
     "CHANGELOG.md",
     "deploy",
-    "skills"
+    "skills",
+    "docs"
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
