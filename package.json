@@ -10,11 +10,13 @@
     "url": "git+https://github.com/smixs/pi-durable-telegram.git"
   },
   "keywords": [
+    "pi-package",
+    "pi",
     "pi-durable",
     "telegram",
     "agent",
-    "grammy",
-    "durable"
+    "durable",
+    "grammy"
   ],
   "engines": {
     "node": ">=22.19.0"
@@ -36,7 +38,8 @@
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
-    "deploy"
+    "deploy",
+    "skills"
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
@@ -62,5 +65,14 @@
   "overrides": {
     "@earendil-works/pi-ai": "1.1.0",
     "@earendil-works/chord": "1.1.0"
+  },
+  "homepage": "https://github.com/smixs/pi-durable-telegram#readme",
+  "bugs": {
+    "url": "https://github.com/smixs/pi-durable-telegram/issues"
+  },
+  "pi": {
+    "skills": [
+      "./skills"
+    ]
   }
 }
