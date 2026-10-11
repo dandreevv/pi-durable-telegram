@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 (2026-10-11)
 
 - Nothing an allowed user sends is refused any more. Videos, animations and stickers are saved and handed to the
   agent like photos and documents. A file over 20 MB or a failed download is reported to the agent with its name,
