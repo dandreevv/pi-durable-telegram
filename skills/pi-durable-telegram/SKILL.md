@@ -51,7 +51,7 @@ Confirm the id with the user. Add more ids only if they ask; everyone on the lis
 ## 3. Install and configure
 
 ```sh
-npm install -g https://github.com/smixs/pi-durable-telegram/releases/latest/download/pi-durable-telegram.tgz
+npm install -g pi-durable-telegram
 pi-durable-telegram --version
 mkdir -p ~/.config/pi-durable-telegram ~/pi-agent
 ( umask 077; cat > ~/.config/pi-durable-telegram/env <<EOF
@@ -109,7 +109,7 @@ loginctl enable-linger "$USER"
 
 - Logs: `journalctl --user -u pi-durable-telegram -f`
 - Restart: `systemctl --user restart pi-durable-telegram` (unfinished runs resume after start)
-- Update: `npm install -g https://github.com/smixs/pi-durable-telegram/releases/latest/download/pi-durable-telegram.tgz` (always the latest release), then restart
+- Update: `npm install -g pi-durable-telegram@latest`, then restart
 - Telegram commands: `/new`, `/stop`, `/compact`, `/status`, `/help`
 
 ## Troubleshooting
