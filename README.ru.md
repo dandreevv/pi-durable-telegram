@@ -33,6 +33,9 @@ curl -fsSL https://raw.githubusercontent.com/smixs/pi-durable-telegram/main/inst
 
 Скрипт задаст несколько вопросов, и бот ответит тебе в Telegram. Та же команда обновляет установку.
 
+Пакет есть и в npm: `npm install -g pi-durable-telegram`, дальше настройка вручную по
+[docs/install.md](docs/install.md#manual-install).
+
 <details>
 <summary>Что делает скрипт, по шагам</summary>
 
@@ -44,8 +47,8 @@ curl -fsSL https://raw.githubusercontent.com/smixs/pi-durable-telegram/main/inst
    токен, который он выдаст. Потом напиши своему новому боту любое сообщение, так скрипт узнает, кто ты.
 4. **Запускает агента** и ждёт, пока бот тебе ответит.
 
-Уже пользуешься pi или npm? `pi install npm:pi-durable-telegram` добавит в pi скилл установки, а
-`npm install -g pi-durable-telegram` поставит только саму программу. Подробнее в [docs/install.md](docs/install.md).
+Уже пользуешься pi? `pi install npm:pi-durable-telegram` добавит скилл, который делает то же самое изнутри pi.
+Подробнее в [docs/install.md](docs/install.md).
 
 </details>
 
