@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Published on npm: `npm install -g pi-durable-telegram`, and `pi install npm:pi-durable-telegram` for the setup skill.
+
 ## 0.1.2 (2026-10-11)
 
 - Nothing an allowed user sends is refused any more. Videos, animations and stickers are saved and handed to the

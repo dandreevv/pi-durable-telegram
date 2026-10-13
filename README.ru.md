@@ -8,7 +8,7 @@
 
 **Твой собственный ИИ-агент, который живёт на твоём сервере и отвечает тебе в Telegram.**
 
-[![Version](https://img.shields.io/github/package-json/v/smixs/pi-durable-telegram?color=brightgreen)](https://github.com/smixs/pi-durable-telegram/releases)
+[![npm](https://img.shields.io/npm/v/pi-durable-telegram?color=brightgreen)](https://www.npmjs.com/package/pi-durable-telegram)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![built on pi-durable](https://img.shields.io/badge/built%20on-pi--durable-4A97BE)](https://github.com/earendil-works/pi/tree/main/packages/durable)
 [![pi package](https://img.shields.io/badge/pi-package-E0873A)](https://pi.dev/packages)
@@ -44,7 +44,8 @@ curl -fsSL https://raw.githubusercontent.com/smixs/pi-durable-telegram/main/inst
    токен, который он выдаст. Потом напиши своему новому боту любое сообщение, так скрипт узнает, кто ты.
 4. **Запускает агента** и ждёт, пока бот тебе ответит.
 
-Подробнее в [docs/install.md](docs/install.md).
+Уже пользуешься pi или npm? `pi install npm:pi-durable-telegram` добавит в pi скилл установки, а
+`npm install -g pi-durable-telegram` поставит только саму программу. Подробнее в [docs/install.md](docs/install.md).
 
 </details>
 

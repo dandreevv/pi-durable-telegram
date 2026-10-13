@@ -33,7 +33,7 @@ a model provider account.
 1. **Install.**
 
    ```sh
-   npm install -g https://github.com/smixs/pi-durable-telegram/releases/latest/download/pi-durable-telegram.tgz
+   npm install -g pi-durable-telegram
    ```
 
 2. **Configure.** Create `~/.config/pi-durable-telegram/env` with mode 600:
@@ -87,7 +87,7 @@ closes the storage and releases its lock; unfinished runs continue after the nex
 Run the installer again, or by hand:
 
 ```sh
-npm install -g https://github.com/smixs/pi-durable-telegram/releases/latest/download/pi-durable-telegram.tgz
+npm install -g pi-durable-telegram@latest
 systemctl --user restart pi-durable-telegram
 ```
 
