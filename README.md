@@ -90,6 +90,23 @@ finishes. You get one answer, not zero and not two. Messages you send while it i
 </details>
 
 <details>
+<summary><b>Plugins (coming next)</b></summary>
+
+The core stays small: it carries your messages, files, buttons and answers. Extra powers will come as plugins that
+ship in the same package, stay off until you switch them on with one line in the settings, and can also be your own
+from a folder or from npm.
+
+| Plugin | What it gives the agent | Status |
+|---|---|---|
+| Web search | looks things up on the internet with your Tavily, Exa, Brave or Parallel key | planned |
+| MCP | connects MCP servers: calendars, databases, your own tools | planned |
+| Skills | a folder of instructions it reads when a task needs them | planned |
+| Helpers | splits a big job between helper agents, on a cheaper model if you like | planned |
+| Tasks and reminders | does something later on its own and writes to you first | planned |
+
+</details>
+
+<details>
 <summary><b>Is it safe?</b></summary>
 
 <img src="assets/security.webp" alt="A narrow server house with one orange door: one paper airplane flies in through the porthole, the grey ones lie by the fence" width="100%">
