@@ -50,6 +50,7 @@ export async function runStatus(scope: MessageScope): Promise<void> {
 		total: totals(await harness.usage(BG)),
 		uptimeMs: Date.now() - scope.rt.startedAt,
 		voice: scope.rt.stt !== undefined,
+		plugins: scope.rt.plugins,
 	});
 	await reply(scope, text);
 }

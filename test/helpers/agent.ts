@@ -59,7 +59,7 @@ export async function startTestAgent(options: {
 		shellEnv: { PATH: process.env.PATH, HOME: options.dir },
 		...options.deps,
 	});
-	await agent.channel.start(agent.harness, BG, { polling: false });
+	await agent.channel.start(agent.harness, BG, { polling: false, plugins: agent.plugins.report });
 	return {
 		agent,
 		logs,
@@ -67,6 +67,7 @@ export async function startTestAgent(options: {
 		close: async () => {
 			await agent.channel.stop();
 			await agent.harness.close(BG);
+			await agent.plugins.close();
 		},
 	};
 }

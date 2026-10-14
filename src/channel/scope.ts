@@ -4,6 +4,7 @@ import type { Message } from "grammy/types";
 import type { CompactReportTask } from "../delivery/compact-report.ts";
 import type { DeliverTask } from "../delivery/task.ts";
 import type { Stt } from "../media/stt.ts";
+import type { PluginReport } from "../plugins/load.ts";
 import type { FatalHandler } from "../runtime/fatal.ts";
 import type { Logger } from "../runtime/log.ts";
 import { telegramErrorSummary } from "../telegram/errors.ts";
@@ -30,6 +31,7 @@ export type ChannelRuntime = {
 	readonly track: (work: Promise<unknown>) => void;
 	readonly onFatal: FatalHandler;
 	readonly now: () => Date;
+	readonly plugins: PluginReport;
 };
 
 /** One incoming message being handled. */

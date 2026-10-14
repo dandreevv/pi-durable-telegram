@@ -20,6 +20,8 @@ export type Config = {
 	readonly telegramRich: "auto" | "never";
 	readonly logLevel: LogLevel;
 	readonly contextCap: number | undefined;
+	/** `PI_PLUGINS`: built-in names, paths or npm package names, in load order. */
+	readonly plugins: readonly string[];
 };
 
 export type ConfigProblem = { readonly variable: string; readonly message: string };
@@ -81,6 +83,7 @@ export function parseConfig(env: Env, defaults: ConfigDefaults = { cwd: process.
 	const telegramRich = parseEnum("TELEGRAM_RICH", env.TELEGRAM_RICH, ["auto", "never"] as const, "auto", out);
 	const logLevel = parseEnum("PI_LOG_LEVEL", env.PI_LOG_LEVEL, LOG_LEVELS, "info", out);
 	const contextCap = parseContextCap(env.PI_CONTEXT_CAP, out);
+	const plugins = parseList(env.PI_PLUGINS);
 	if (out.problems.length > 0) throw new ConfigError(out.problems);
 	return {
 		botToken,
@@ -97,7 +100,13 @@ export function parseConfig(env: Env, defaults: ConfigDefaults = { cwd: process.
 		telegramRich,
 		logLevel,
 		contextCap,
+		plugins,
 	};
+}
+
+/** A comma-separated list: items trimmed, blanks and repeats dropped, first-appearance order kept. */
+export function parseList(value: string | undefined): string[] {
+	return [...new Set((value ?? "").split(",").map((item) => item.trim()))].filter((item) => item !== "");
 }
 
 function homeOf(env: Env): string {

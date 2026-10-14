@@ -14,6 +14,10 @@ export type StatusInfo = {
 	readonly total: UsageTotals;
 	readonly uptimeMs: number;
 	readonly voice: boolean;
+	readonly plugins: {
+		readonly loaded: readonly string[];
+		readonly problems: readonly { plugin: string; reason: string }[];
+	};
 };
 
 export function formatTokens(count: number): string {
@@ -49,5 +53,11 @@ export function formatStatus(info: StatusInfo): string {
 		`This chat: ${formatUsage(info.chat)}`,
 		`All chats: ${formatUsage(info.total)}`,
 		`Voice: ${info.voice ? "on" : "off (no DEEPGRAM_API_KEY)"}`,
+		formatPlugins(info.plugins),
 	].join("\n");
+}
+
+function formatPlugins({ loaded, problems }: StatusInfo["plugins"]): string {
+	const failed = problems.map((problem) => `${problem.plugin} (${problem.reason.slice(0, 80)})`);
+	return `Plugins: ${loaded.join(", ") || "none"}${failed.length > 0 ? `; problems: ${failed.join(", ")}` : ""}`;
 }

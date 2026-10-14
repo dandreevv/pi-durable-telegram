@@ -30,6 +30,7 @@ export async function runDaemon(config: Config, deps: DaemonDeps): Promise<void>
 		shutdown: async () => {
 			await agent?.channel.stop();
 			await agent?.harness.close(BG);
+			await agent?.plugins.close();
 			lock.release();
 		},
 	});
@@ -42,7 +43,7 @@ export async function runDaemon(config: Config, deps: DaemonDeps): Promise<void>
 	process.on("uncaughtException", (error) => onFatal("uncaught exception", error));
 	try {
 		agent = await openAgent(config, { ...deps, onFatal, log });
-		await agent.channel.start(agent.harness, BG);
+		await agent.channel.start(agent.harness, BG, { plugins: agent.plugins.report });
 		log.info("started", {
 			model: `${config.provider}/${config.modelId}`,
 			workdir: config.workdir,

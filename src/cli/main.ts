@@ -38,9 +38,10 @@ async function run(envFile: string | undefined): Promise<number | undefined> {
 		process.stderr.write(`Configuration error:\n${error.message}\n`);
 		return 2;
 	}
+	const pluginEnv = { ...process.env };
 	const secrets = scrubSecrets(process.env);
 	const log = createLogger({ level: config.logLevel });
-	await runDaemon(config, { log, authContext: createAuthContext(secrets) });
+	await runDaemon(config, { log, authContext: createAuthContext(secrets), pluginEnv });
 	return undefined;
 }
 

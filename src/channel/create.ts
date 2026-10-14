@@ -7,6 +7,7 @@ import { createCompactReportTask } from "../delivery/compact-report.ts";
 import { createDeliverTask } from "../delivery/task.ts";
 import type { DeliveryDeps } from "../delivery/types.ts";
 import type { Stt } from "../media/stt.ts";
+import type { PluginReport } from "../plugins/load.ts";
 import type { FatalHandler } from "../runtime/fatal.ts";
 import { createLogger, errorSummary, type Logger } from "../runtime/log.ts";
 import { packageVersion } from "../runtime/version.ts";
@@ -56,7 +57,11 @@ export interface TelegramChannel {
 	 * After `Harness.open`: applies the configured agent to existing chats, registers commands, calls
 	 * `harness.resume()` and starts long polling. Resolves once polling runs. Nothing else may start the scheduler first.
 	 */
-	start(harness: Harness, context: Context, options?: { readonly polling?: boolean }): Promise<void>;
+	start(
+		harness: Harness,
+		context: Context,
+		options?: { readonly polling?: boolean; readonly plugins?: PluginReport },
+	): Promise<void>;
 	/**
 	 * Drain in-flight handlers, then stop polling and confirm the handled updates. An update whose handler did not
 	 * finish, or that arrived during shutdown, stays unconfirmed so Telegram redelivers it. Does not close the harness.
@@ -129,7 +134,8 @@ export function createTelegramChannel(options: TelegramChannelOptions): Telegram
 		extension,
 		start: async (opened, context, startOptions) => {
 			harness = opened;
-			await lifecycle.start(opened, context, startOptions?.polling ?? true);
+			const plugins = startOptions?.plugins ?? { loaded: [], problems: [] };
+			await lifecycle.start(opened, context, startOptions?.polling ?? true, plugins);
 		},
 		stop: () => lifecycle.stop(),
 		handleUpdate: (update) => lifecycle.handle(update),
@@ -165,8 +171,8 @@ class Lifecycle {
 		this.#d = deps;
 	}
 
-	async start(harness: Harness, context: Context, polling: boolean): Promise<void> {
-		const rt = this.#runtime(harness);
+	async start(harness: Harness, context: Context, polling: boolean, plugins: PluginReport): Promise<void> {
+		const rt = this.#runtime(harness, plugins);
 		this.#rt = rt;
 		// A failed Session aborts running work before it can report; this is the one place it becomes fatal.
 		void harness.closed.then((end) => {
@@ -179,9 +185,22 @@ class Lifecycle {
 		});
 		harness.resume();
 		if (polling) await this.#startPolling(rt);
+		this.#notifyPlugins(rt);
 	}
 
-	#runtime(harness: Harness): ChannelRuntime {
+	/** Once per start, not durable: each allowed user gets one line per plugin problem. */
+	#notifyPlugins(rt: ChannelRuntime): void {
+		if (rt.plugins.problems.length === 0) return;
+		const text = rt.plugins.problems.map((problem) => `Plugin ${problem.plugin}: ${problem.reason}`).join("\n");
+		for (const chat of rt.allowed) {
+			const send = rt.port.sendMessage(chat, text, {});
+			rt.track(
+				send.catch((error: unknown) => rt.log.warn("plugin_notice_failed", { chat, ...telegramErrorSummary(error) })),
+			);
+		}
+	}
+
+	#runtime(harness: Harness, plugins: PluginReport): ChannelRuntime {
 		const { options, log, port } = this.#d;
 		const defaults = { model: options.model, thinkingLevel: options.thinkingLevel, cwd: options.workdir };
 		return {
@@ -202,6 +221,7 @@ class Lifecycle {
 			track: (work) => this.#track(work),
 			onFatal: this.#d.onFatal,
 			now: () => new Date(),
+			plugins,
 		};
 	}
 

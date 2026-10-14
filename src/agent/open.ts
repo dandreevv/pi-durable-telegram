@@ -9,6 +9,7 @@ import { createTelegramChannel, type TelegramChannel } from "../channel/create.t
 import type { Config } from "../config/schema.ts";
 import { createDeepgramStt } from "../media/deepgram.ts";
 import type { Stt } from "../media/stt.ts";
+import { type LoadedPlugins, loadPlugins } from "../plugins/load.ts";
 import type { FatalHandler } from "../runtime/fatal.ts";
 import { errorSummary, type Logger, silentLogger } from "../runtime/log.ts";
 import { ensurePrivateDir, makePrivate } from "../runtime/private-dir.ts";
@@ -25,6 +26,7 @@ export type Agent = {
 	readonly models: MutableModels;
 	readonly channel: TelegramChannel;
 	readonly config: Config;
+	readonly plugins: LoadedPlugins;
 };
 
 export type OpenAgentDeps = {
@@ -37,6 +39,8 @@ export type OpenAgentDeps = {
 	readonly onFatal?: FatalHandler;
 	/** Environment the agent's bash sees, before the allowlist filter; default `process.env`. */
 	readonly shellEnv?: Readonly<Record<string, string | undefined>>;
+	/** Environment plugins read, secrets included; default `process.env`. */
+	readonly pluginEnv?: Readonly<Record<string, string | undefined>>;
 	readonly previewIntervalMs?: number;
 	readonly editRetryDelaysMs?: readonly number[];
 	readonly limits?: { readonly downloadBytes?: number; readonly uploadBytes?: number };
@@ -84,9 +88,18 @@ export async function openAgent(config: Config, deps: OpenAgentDeps = {}): Promi
 	);
 	registry.install(createEmptyAnswerExtension());
 	registry.install(channel.extension);
+	const snapshot = registry.snapshot();
+	const taken = new Set([...snapshot.installed(), ...snapshot.tools().map((entry) => entry.tool)].map((x) => x.name));
+	const base = { env: deps.pluginEnv ?? process.env, workdir: config.workdir, dataDir: config.dataDir, log };
+	const plugins = await loadPlugins(config.plugins, base, taken);
+	for (const extension of plugins.extensions) registry.install(extension);
 	const database = join(config.dataDir, DATABASE_FILE);
-	const storage = await openNodeSqliteStorage(database);
-	await makePrivate([database, `${database}-wal`, `${database}-shm`]);
+	const failed = async (error: unknown): Promise<never> => {
+		await plugins.close();
+		throw error;
+	};
+	const storage = await openNodeSqliteStorage(database).catch(failed);
+	await makePrivate([database, `${database}-wal`, `${database}-shm`]).catch(failed);
 	const harness = await Harness.open(
 		storage,
 		{
@@ -98,9 +111,9 @@ export async function openAgent(config: Config, deps: OpenAgentDeps = {}): Promi
 			...optional({ now: deps.now }),
 		},
 		BG,
-	);
-	await checkTasks(harness);
-	return { harness, models, channel, config };
+	).catch(failed);
+	await checkTasks(harness).catch(failed);
+	return { harness, models, channel, config, plugins };
 }
 
 function optional<T extends Record<string, unknown>>(values: T): Partial<T> {

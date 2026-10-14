@@ -88,7 +88,9 @@ test("status formatting", () => {
 		total: zero,
 		uptimeMs: 60_000,
 		voice: false,
+		plugins: { loaded: ["search", "skills"], problems: [{ plugin: "mcp", reason: "did not load: no MCP config" }] },
 	});
+	assert.match(text, /Plugins: search, skills; problems: mcp \(did not load: no MCP config\)/);
 	assert.match(text, /Model: anthropic\/claude-opus-5-5, thinking high/);
 	assert.match(text, /State: working \(bash\), queued: 2/);
 	assert.match(text, /Context: 250\.0k \/ 1\.00M \(25%\)/);

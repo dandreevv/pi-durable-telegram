@@ -19,6 +19,7 @@ export { type Chunk, splitForTelegram } from "./format/chunk.ts";
 export { markdownToTelegramHtml } from "./format/markdown-html.ts";
 export { createDeepgramStt } from "./media/deepgram.ts";
 export { type Stt, SttError, type SttErrorKind, type Transcript } from "./media/stt.ts";
+export type { Plugin, PluginContext, PluginReport } from "./plugins/load.ts";
 export { acquireDataDirLock, LockHeld } from "./runtime/lock.ts";
 export { createLogger, type Logger, type LogLevel } from "./runtime/log.ts";
 export { TelegramApiError, TelegramUnavailable, TelegramUnknown } from "./telegram/errors.ts";
