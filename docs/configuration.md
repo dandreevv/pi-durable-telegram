@@ -17,6 +17,7 @@ variables win over the file). Invalid values stop the daemon at start with one l
 | `PI_CONTEXT_CAP` | no | model window | Compact the context once it grows past this many tokens (in the background from three quarters of it) |
 | `DEEPGRAM_API_KEY` | no | | Enables voice transcription |
 | `TELEGRAM_API_ROOT` | no | `https://api.telegram.org` | Bot API server (for a local Bot API server) |
+| `TELEGRAM_RICH` | no | `auto` | `auto`: answers are rich messages (tables, task lists, folds, buttons) streamed as native drafts with a stop button; `never`: Telegram HTML messages streamed by editing one message |
 | `PI_LOG_LEVEL` | no | `info` | `debug`, `info`, `warn` or `error` |
 
 Example `~/.config/pi-durable-telegram/env`:

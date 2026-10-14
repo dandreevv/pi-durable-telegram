@@ -3,6 +3,13 @@
 ## Unreleased
 
 - Published on npm: `npm install -g pi-durable-telegram`, and `pi install npm:pi-durable-telegram` for the setup skill.
+- Answers are Telegram rich messages: tables, task lists, headings and `<details>` folds render natively. Long
+  answers are split within Telegram's limits; a refused rich message falls back to HTML. `TELEGRAM_RICH=never` keeps
+  the old HTML messages.
+- Buttons: the model can end a question with buttons; a tap is your next message, and the pressed button is marked.
+- Answers stream as native Telegram drafts with a stop button that works like `/stop`; where drafts are refused the
+  edited preview message is used as before.
+- pi-durable, pi-ai and chord 1.2.0.
 
 ## 0.1.2 (2026-10-11)
 

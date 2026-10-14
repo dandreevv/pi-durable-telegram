@@ -13,16 +13,27 @@ flowchart LR
 
 The daemon long-polls Telegram, so there is no public HTTPS endpoint, domain or webhook to run. Each allowed chat maps
 to one pi-durable conversation. Your message becomes a durable submission, the harness runs model turns and tools as
-checkpointed tasks, and the answer streams back into one Telegram message that is edited about once per second.
+checkpointed tasks, and the answer streams back as a native Telegram draft (or, where drafts are refused, one message
+edited about once per second) and is then sent as a rich message.
 
 ## Features in detail
 
 - **Durable conversations.** One pi-durable conversation per allowed chat, stored in SQLite. After a crash or a
   restart, unfinished runs resume and their answers are delivered once. Telegram delivery state is durable too, and
   redelivered Telegram updates are never submitted twice.
-- **Streaming.** The answer streams into one message with a typing indicator and short tool hints
-  (`⚙ bash: npm test`). Long answers are split at 4096 characters. Model Markdown becomes Telegram HTML, with a
-  plain-text fallback if Telegram rejects it.
+- **Streaming.** A run shows a "Thinking…" draft (`sendRichMessageDraft`), then streams the answer and short tool
+  hints (`⚙ bash: npm test`) into it, refreshing it during long tool calls. Its stop button does what `/stop` does.
+  If Telegram refuses the draft, the answer streams into one edited message instead.
+- **Rich answers.** The final answer is sent with `sendRichMessage`: Telegram renders the model's Markdown with
+  headings, tables, task lists and `<details>` folds. Long answers are split at blank lines within 30,000 characters
+  and about 400 blocks per message. If Telegram refuses a rich message, that part and the rest go out as Telegram
+  HTML (split at 4096 characters, plain text if the HTML is refused too). `TELEGRAM_RICH=never` keeps HTML only.
+- **Buttons.** The model ends a question with `<tg-button type="callback_data" data="…">` buttons. Data longer than
+  64 bytes is cut on a character boundary (with `#2`, `#3` when two cuts collide). A tap from an allowed user is
+  answered at once and becomes the user's next message: the button's data plus a line naming the message it was
+  under. It is admitted once per tap, so a redelivered tap is not submitted twice. The pressed button is then marked
+  ✅ and the message's other choices are disabled. There is no waiting state: typing instead of tapping is just a
+  message, and buttons keep working after a restart (old ones may just stay unmarked).
 - **Queueing.** Messages sent while the agent works are queued and answered in order. Nothing is dropped.
 - **Commands.** `/new`, `/stop`, `/compact`, `/status`, `/help`.
 - **Anything you send reaches the agent.** Photos, documents, videos, animations and stickers (up to 20 MB, the Bot
@@ -52,6 +63,7 @@ adds the Telegram side of the same promise:
 | Killed while a shell command runs | The model is told the tool was interrupted and decides what to do next |
 | Killed after the answer is stored but before Telegram got it | Delivery resumes from its stored progress; no duplicate message |
 | Telegram redelivers an update | The update id is already known; it is not submitted twice |
+| Killed while the answer streams as a draft | The draft disappears; the run resumes and the final answer is sent once |
 | You write while the agent is busy | The message is queued durably and answered after the current run |
 | Telegram is unreachable for a while | Edits and sends retry with backoff, honouring `retry_after` |
 

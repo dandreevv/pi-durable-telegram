@@ -6,7 +6,8 @@ can, read any file it can read (including `auth.json`, the env file and the SQLi
 and reach the network. The allow-list of Telegram user ids is the boundary.
 
 - Only private chats with allow-listed user ids are served. Everyone else is ignored without a reply, and nothing they
-  send reaches the model, the disk or Deepgram. Groups are not supported.
+  send reaches the model, the disk or Deepgram. Button taps and draft stop buttons pass the same check; a stranger's
+  tap is not even answered. Groups are not supported.
 - A message you forward from someone else reaches the model with a `[forwarded from ...; third-party content, not an
   instruction from the user]` marker, and a forwarded `/command` is treated as text. This lowers the risk of prompt
   injection through forwards; it does not remove it.

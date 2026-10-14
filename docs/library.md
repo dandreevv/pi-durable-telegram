@@ -29,11 +29,12 @@ const channel = createTelegramChannel({
   model: { provider: "anthropic", modelId: "claude-opus-5-5" },
   thinkingLevel: "high",
   models,
+  rich: true, // rich answers, buttons and native drafts; omit for HTML messages
 });
 
 const registry = createRegistry();
 registry.install(createWorkspaceTools({ env: buildSafeEnv(process.env) }));
-registry.install(createPromptExtension({ instructionsPath: `${workdir}/AGENTS.md` }));
+registry.install(createPromptExtension({ instructionsPath: `${workdir}/AGENTS.md`, rich: true }));
 registry.install(channel.extension);
 
 const harness = await Harness.open(
