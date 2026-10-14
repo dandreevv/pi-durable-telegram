@@ -96,15 +96,15 @@ finishes. You get one answer, not zero and not two. Messages you send while it i
 
 The core stays small: it carries your messages, files, buttons and answers. Extra powers come as plugins that ship in
 the same package and stay off until you switch them on with one line in the settings, for example
-`PI_PLUGINS=search,skills`. A plugin can also be your own, from a folder or from npm.
+`PI_PLUGINS=search,skills,helpers,reminders`. A plugin can also be your own, from a folder or from npm.
 
 | Plugin | What it gives the agent | Status |
 |---|---|---|
 | Web search | looks things up on the internet with your Tavily, Exa, Brave or Parallel key | available |
 | MCP | connects MCP servers: calendars, databases, your own tools | available |
 | Skills | a folder of instructions it reads when a task needs them | available |
-| Helpers | splits a big job between helper agents, on a cheaper model if you like | planned |
-| Tasks and reminders | does something later on its own and writes to you first | planned |
+| Helpers | splits a big job between helper agents, on a cheaper model if you like | available |
+| Tasks and reminders | does something later on its own and writes to you first | available |
 
 How to switch each one on and how to write your own: [docs/plugins.md](docs/plugins.md).
 

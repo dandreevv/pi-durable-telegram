@@ -4,12 +4,12 @@ The core carries messages, files, buttons and answers. Everything else comes as 
 list them in `PI_PLUGINS` in the env file, then restart the service:
 
 ```sh
-PI_PLUGINS=search,mcp,skills
+PI_PLUGINS=search,mcp,skills,helpers,reminders
 ```
 
 An entry is one of:
 
-- a built-in plugin: `search`, `mcp` or `skills`;
+- a built-in plugin: `search`, `mcp`, `skills`, `helpers` or `reminders`;
 - a path to a module file or a folder: absolute, `~/...`, or relative to `PI_WORKDIR` (`./plugins/mine.mjs`);
 - the name of an npm package installed in `<PI_DATA_DIR>/plugins` (see [below](#install-a-plugin-from-npm)).
 
@@ -88,6 +88,47 @@ list of names, descriptions and paths; when a task matches, the agent reads that
 two skills share a name, the first folder wins. The list is rebuilt only when a `SKILL.md` appears, changes or goes
 away.
 
+## Helpers: `helpers`
+
+Gives the agent a `helper` tool: it hands a self-contained task to a helper agent and gets the helper's final answer
+back as the tool result. A helper has the same tools as the main agent (bash, files, `telegram_send_file`, search,
+MCP, reminders), except `helper` itself, so helpers cannot start helpers. A helper does not see the chat: the task
+text is all it knows. Several helper calls in one answer run at the same time.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `PI_HELPER_MODEL` | the main model | `provider/model` for helpers, with the ids you would put in `PI_PROVIDER` and `PI_MODEL`. Another provider needs its own `login`. |
+| `PI_HELPER_THINKING` | the main level; `off` with `PI_HELPER_MODEL` | thinking level of helpers |
+| `PI_HELPERS_MAX` | 4 | helper calls running at once per chat; a call over the limit comes back to the model as an error asking it to wait for the running ones |
+
+- A bad `PI_HELPER_MODEL` or `PI_HELPER_THINKING` is reported as a plugin problem; helpers then use the main model.
+- `/stop` and the stop button of a draft stop the helpers together with the answer.
+- After a restart a running helper goes on in the same helper conversation, and its task is not sent to it again.
+  The limit is counted in memory per running service.
+- Helper spend is in the "All chats" line of `/status`, not in "This chat".
+
+## Reminders: `reminders`
+
+Gives the agent a `remind` tool with three operations: `add` (a text plus `at`, a date and time, or `in`, minutes from
+now; optional `every`: `daily`, `weekdays`, `weekly` or a number of minutes, at least 5), `list` (pending reminders
+with ids and next times) and `cancel` (by id). When a reminder comes due, the agent gets its text as a message marked
+`[reminder …]`, does what it says and answers in the chat like any other answer.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `PI_TIMEZONE` | the server's zone | IANA zone such as `Europe/Berlin` for times without an offset and for the date in the prompt |
+
+- A repeating reminder keeps its local time across daylight saving changes. A time skipped by the clock change is
+  refused for `add`; a repeat that falls into it moves past it that day.
+- At most 100 pending reminders per chat, at most 366 days ahead.
+- Reminders are stored durably. After a restart they wait again; one missed while the service was down fires once
+  after start, marked late; a repeating one fires once and then goes on from its next time, it does not catch up every
+  missed time. Each due time wakes the agent at most once, even across restarts.
+- `/new` keeps reminders. A reminder set by a helper goes to the main chat.
+- With `reminders` removed from `PI_PLUGINS`, a pending reminder is dropped at its due time without waking the agent
+  (the log says `reminder … dropped`). The service always starts.
+- There is no separate task list: ask the agent to keep lists in files in the working directory.
+
 ## Write your own
 
 A plugin is an ES module whose default export is a function. It receives a small context and returns a pi-durable
@@ -118,6 +159,8 @@ The context:
 | `env` | the environment from the env file, secrets included |
 | `workdir`, `dataDir` | `PI_WORKDIR` and `PI_DATA_DIR` |
 | `log` | the service log: `ctx.log.info("event", { key: "value" })` |
+| `models` | pi-ai's model catalog: register another provider here |
+| `now()` | the service clock, in milliseconds |
 | `problem(text)` | report a part that failed while the rest works (one chat line, listed in `/status`) |
 | `onClose(fn)` | run `fn` at shutdown, for example to stop a child process |
 
@@ -129,7 +172,8 @@ Rules:
   A section key is lowercase letters, digits, `-` and `_`, starting with a letter. To change a core tool or section on
   purpose, use pi-durable's `wraps`.
 - A tool is not rerun after a restart unless it says `replay: "safe"`; set that only for tools that are safe to repeat.
-- Plugins cannot define pi-durable tasks yet.
+- Plugins cannot define pi-durable tasks: an unfinished task of a removed plugin would block startup. The tasks of the
+  built-in plugins are part of the core and always registered.
 - A changed plugin needs a service restart. The plugin factory has 60 seconds to finish.
 
 For types, `import type { Plugin } from "pi-durable-telegram"`.
@@ -153,7 +197,8 @@ dependencies.
   service still starts. The log has `plugin_problem` with the reason, each allowed user gets one short chat line after
   start, and `/status` lists it under problems.
 - If you remove a plugin, or it breaks, while one of its tool calls is unfinished, the model gets that call back as an
-  error ("was interrupted") after the restart and the answer continues. Startup is never blocked by it.
+  error ("was interrupted") after the restart and the answer continues. A running helper stops with it. Startup is
+  never blocked by it.
 
 ---
 

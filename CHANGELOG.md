@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- `helpers`: the `helper` tool hands a self-contained task to a helper agent with the same tools (without `helper`
+  itself) and returns its final answer. Several calls in one answer run at once, up to `PI_HELPERS_MAX` (default 4)
+  per chat; `PI_HELPER_MODEL` and `PI_HELPER_THINKING` pick the helpers' model. `/stop` and the draft's stop button
+  stop helpers with the answer; after a restart a helper goes on where it was without getting its task twice.
+- `reminders`: the `remind` tool adds (at a local time in `PI_TIMEZONE` or in minutes, once or `daily`, `weekdays`,
+  `weekly` or every N minutes), lists and cancels reminders. A due reminder wakes the agent with its text in the chat,
+  once per due time even across restarts; one missed while the service was down fires once after start, marked late.
+  Reminders of a plugin that is off are dropped at their due time and never block startup.
+- Plugins get `models` and `now()` in their context. Plugins still cannot define tasks.
+
 ## 0.1.4 (2026-10-14)
 
 - Plugins, off by default: `PI_PLUGINS` lists built-in plugins, local folders or npm packages installed in

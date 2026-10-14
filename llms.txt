@@ -21,7 +21,7 @@ Key facts:
 - [README in Russian](https://github.com/smixs/pi-durable-telegram/blob/main/README.ru.md)
 - [Install, update, remove](https://github.com/smixs/pi-durable-telegram/blob/main/docs/install.md): what the installer does, manual install, exit codes
 - [Configuration](https://github.com/smixs/pi-durable-telegram/blob/main/docs/configuration.md): every environment variable
-- [Plugins](https://github.com/smixs/pi-durable-telegram/blob/main/docs/plugins.md): web search, MCP, skills and writing your own
+- [Plugins](https://github.com/smixs/pi-durable-telegram/blob/main/docs/plugins.md): web search, MCP, skills, helpers, reminders and writing your own
 - [How it works](https://github.com/smixs/pi-durable-telegram/blob/main/docs/how-it-works.md): architecture, features in detail, what happens on each failure
 - [Security in detail](https://github.com/smixs/pi-durable-telegram/blob/main/docs/security.md) and the [security policy](https://github.com/smixs/pi-durable-telegram/blob/main/SECURITY.md)
 - [Library API and development](https://github.com/smixs/pi-durable-telegram/blob/main/docs/library.md)
