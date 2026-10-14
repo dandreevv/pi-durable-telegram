@@ -101,7 +101,7 @@ export default () => ({ name: "ext-dup", tools: [t, t] });\n`,
 	const reasons = Object.fromEntries(t.agent.plugins.report.problems.map((p) => [p.plugin, p.reason]));
 	assert.match(reasons["./missing.mjs"] ?? "", /^did not load: not found: .*missing\.mjs$/);
 	assert.equal(reasons["./throws.mjs"], "did not load: boom in factory");
-	assert.equal(reasons["./tasks.mjs"], "did not load: plugins cannot define tasks yet");
+	assert.equal(reasons["./tasks.mjs"], "did not load: plugins cannot define tasks");
 	assert.equal(reasons["./clash.mjs"], "did not load: the name bash is already taken");
 	assert.equal(reasons["not a name!"], "did not load: not a plugin name or path");
 	assert.match(reasons["absent-pkg"] ?? "", /not installed: run npm install --prefix .*plugins absent-pkg/);

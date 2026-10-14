@@ -35,6 +35,7 @@ const BUILTIN: Record<string, () => Promise<{ default: unknown }>> = {
 	mcp: () => import("./mcp.ts"),
 	skills: () => import("./skills.ts"),
 	helpers: () => import("./helpers.ts"),
+	reminders: () => import("./reminders/index.ts"),
 };
 const LOAD_MS = 60_000;
 const LATE = `did not finish loading in ${LOAD_MS / 1000} s`;
@@ -126,7 +127,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 function claim(extension: Extension, taken: Set<string>): string[] {
 	if (!isObject(extension) || typeof extension.name !== "string" || extension.name === "")
 		throw new Error("the plugin did not return an extension with a name");
-	if ((extension.tasks?.length ?? 0) > 0) throw new Error("plugins cannot define tasks yet");
+	if ((extension.tasks?.length ?? 0) > 0) throw new Error("plugins cannot define tasks");
 	const sections = (extension.sections ?? []).map((section) => `section:${section.key}`);
 	const names = [extension.name, ...(extension.tools ?? []).map((tool) => tool.name), ...sections];
 	const clash = names.find((name) => taken.has(name));

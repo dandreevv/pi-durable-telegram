@@ -51,7 +51,7 @@ export type TelegramChannelOptions = {
 };
 
 export interface TelegramChannel {
-	/** Install in the registry before `Harness.open`: tasks `tg.deliver`, `tg.compact-report`; tool `telegram_send_file`. */
+	/** Install in the registry before `Harness.open`: tasks `tg.deliver`, `tg.compact-report`, `tg.remind`; tool `telegram_send_file`. */
 	readonly extension: Extension;
 	/**
 	 * After `Harness.open`: applies the configured agent to existing chats, registers commands, calls

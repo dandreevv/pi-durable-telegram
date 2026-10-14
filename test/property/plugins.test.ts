@@ -28,14 +28,15 @@ test("P-plugin-list: items are trimmed, unique, non-empty, in first-appearance o
 	});
 });
 
+const BUILTINS = ["search", "mcp", "skills", "helpers", "reminders"];
 const segment = fc.stringMatching(/^[a-z0-9][a-z0-9._-]{0,10}$/);
 
 test("P-plugin-kind: built-ins, scoped and plain npm names, paths and junk are told apart", (t) => {
-	for (const name of ["search", "mcp", "skills"]) assert.equal(pluginKind(name), "builtin");
+	for (const name of BUILTINS) assert.equal(pluginKind(name), "builtin");
 	check(
 		t,
 		fc.oneof(
-			segment.filter((name) => !["search", "mcp", "skills"].includes(name)).map((name) => [name, "npm"] as const),
+			segment.filter((name) => !BUILTINS.includes(name)).map((name) => [name, "npm"] as const),
 			fc.tuple(segment, segment).map(([scope, name]) => [`@${scope}/${name}`, "npm"] as const),
 			fc
 				.tuple(fc.constantFrom("./", "../", "~/", "/", "dir/"), segment)
