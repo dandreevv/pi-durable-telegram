@@ -60,6 +60,7 @@ test("T-mcp: tools of a stdio server are exposed and callable; a failing server 
 					args: ["-e", "process.stderr.write('bad config here\\n'); process.exit(1)"],
 				},
 				unset: { command: process.execPath, env: { X: "${NOT_SET}" } },
+				hung: { command: process.execPath, args: ["-e", "process.stdin.resume()"] },
 			},
 		};
 		// biome-ignore-end lint/suspicious/noTemplateCurlyInString: ${VAR} is the MCP config syntax under test
@@ -74,17 +75,24 @@ test("T-mcp: tools of a stdio server are exposed and callable; a failing server 
 			observe(record, toolCall("mcp__good__env", {})),
 			observe(record, fauxAssistantMessage("done")),
 		]);
-		const env = { PATH: process.env.PATH, HOME: dir, TELEGRAM_BOT_TOKEN: "123:abc", MY_TOKEN: "tok-1" };
+		const env = {
+			PATH: process.env.PATH,
+			HOME: dir,
+			TELEGRAM_BOT_TOKEN: "123:abc",
+			MY_TOKEN: "tok-1",
+			PI_MCP_TIMEOUT: "1",
+		};
 		const t = await startTestAgent({ dir, faux, port, config: { PI_PLUGINS: "mcp" }, deps: { pluginEnv: env } });
 		const pid = Number(await readFile(pidFile, "utf8"));
 		try {
 			assert.deepEqual(t.agent.plugins.report.loaded, ["mcp"]);
 			const problems = t.agent.plugins.report.problems.map((p) => p.reason).sort();
-			assert.equal(problems.length, 2);
+			assert.equal(problems.length, 3);
 			assert.match(problems[0] ?? "", /^server broken did not start: .*bad config here/);
-			assert.match(problems[1] ?? "", /^server unset did not start: .*\$\{NOT_SET\} is not set/);
+			assert.equal(problems[1], "server hung did not start: did not answer in 1 s", "a hung server drops only itself");
+			assert.match(problems[2] ?? "", /^server unset did not start: .*\$\{NOT_SET\} is not set/);
 			const notice = await waitFor(() => port.created(CHAT).find((m) => m.text.startsWith("Plugin mcp")));
-			assert.equal(notice.text.split("\n").length, 2);
+			assert.equal(notice.text.split("\n").length, 3);
 
 			await t.agent.channel.handleUpdate(textUpdate(CHAT, 1, "use mcp"));
 			await waitFor(() => port.textsIn(CHAT).includes("done"));

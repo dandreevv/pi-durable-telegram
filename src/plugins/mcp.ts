@@ -13,7 +13,7 @@ import {
 import { buildSafeEnv } from "../agent/tools/bash.ts";
 import { errorSummary } from "../runtime/log.ts";
 import { packageVersion } from "../runtime/version.ts";
-import { expandPath, type PluginContext } from "./load.ts";
+import { expandPath, type PluginContext, withTimeout } from "./load.ts";
 
 type Server = { command?: unknown; args?: unknown; env?: unknown; cwd?: unknown; url?: unknown; headers?: unknown };
 type Env = PluginContext["env"];
@@ -87,9 +87,11 @@ async function connect(name: string, server: unknown, ctx: PluginContext, client
 	const client = new McpClient({ name: "pi-durable-telegram", version: packageVersion(), requestTimeoutMs: 30_000 });
 	clients.push(client);
 	const transport = transportFor(server, ctx);
+	// Each server has its own deadline, under the loader's 60 s, so one hung server does not drop the others.
+	const seconds = Number(ctx.env.PI_MCP_TIMEOUT) > 0 ? Number(ctx.env.PI_MCP_TIMEOUT) : 30;
 	try {
-		await client.connect(transport);
-		const tools = await client.listTools();
+		const ready = client.connect(transport).then(() => client.listTools());
+		const tools = await withTimeout(ready, seconds * 1000, `did not answer in ${seconds} s`);
 		ctx.log.info("mcp_server_ready", { server: name, tools: tools.length });
 		return tools.map((tool) => toTool(name, client, tool));
 	} catch (error) {
@@ -125,7 +127,7 @@ export default async function mcpPlugin(ctx: PluginContext): Promise<Extension> 
 			try {
 				return await connect(name, server, ctx, clients);
 			} catch (error) {
-				ctx.problem(`server ${name} did not start: ${errorSummary(error).replace(/^Error: /, "")}`);
+				ctx.problem(`server ${name} did not start: ${errorSummary(error).replace(/^(Error: )+/, "")}`);
 				return [];
 			}
 		}),
