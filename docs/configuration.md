@@ -26,6 +26,7 @@ variables win over the file). Invalid values stop the daemon at start with one l
 | `BRAVE_API_KEY` | no | | `search` plugin: Brave Search API key |
 | `PARALLEL_API_KEY` | no | | `search` plugin: Parallel key |
 | `PI_MCP_CONFIG` | no | `<PI_WORKDIR>/.mcp.json` | `mcp` plugin: the MCP servers file (absolute, `~` or relative to `PI_WORKDIR`) |
+| `PI_MCP_TIMEOUT` | no | `30` | `mcp` plugin: seconds each server has to start and list its tools (keep under 60) |
 | `PI_SKILLS_DIRS` | no | | `skills` plugin: more comma-separated skill folders, after `<PI_WORKDIR>/skills` and pi's `~/.pi/agent/skills` |
 
 Example `~/.config/pi-durable-telegram/env`:

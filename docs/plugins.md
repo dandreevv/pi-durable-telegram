@@ -64,8 +64,9 @@ Connects the [MCP](https://modelcontextprotocol.io) servers listed in `<PI_WORKD
 - `${NAME}` is replaced with the variable from the env file, so tokens stay in the env file. Like `bash`, a server
   process gets no secrets from the service environment, only the ones its config names.
 - Each tool becomes `mcp__<server>__<tool>`, for example `mcp__github__create_issue`.
-- A server that does not start is reported in one chat line while the others work. Tools are read once at start: a
-  change in a server or in the file needs a service restart, and so does a server that stopped while running.
+- A server that does not start, or does not answer within 30 seconds (`PI_MCP_TIMEOUT`), is reported in one chat
+  line while the others work. Tools are read once at start: a change in a server or in the file needs a service
+  restart, and so does a server that stopped while running.
 - A tool call cut off by a restart is never repeated by itself: it may already have done something, so the model is
   told it was interrupted and checks first.
 
@@ -124,7 +125,9 @@ Rules:
 
 - `parameters` is a JSON Schema object. A thrown error becomes an error result the model reads.
 - Tool and extension names must not repeat the core ones (`read`, `write`, `edit`, `bash`, `telegram_send_file`) or
-  another plugin's; such a plugin is not loaded. To wrap a core tool on purpose, use pi-durable's `wraps`.
+  another plugin's; such a plugin is not loaded. The same goes for section keys (core: `preamble`, `agents_md`).
+  A section key is lowercase letters, digits, `-` and `_`, starting with a letter. To change a core tool or section on
+  purpose, use pi-durable's `wraps`.
 - A tool is not rerun after a restart unless it says `replay: "safe"`; set that only for tools that are safe to repeat.
 - Plugins cannot define pi-durable tasks yet.
 - A changed plugin needs a service restart. The plugin factory has 60 seconds to finish.
@@ -145,7 +148,8 @@ dependencies.
 
 ## When a plugin breaks
 
-- A plugin that cannot be found, fails to import, throws while starting, or reuses a taken name is skipped. The
+- A plugin that cannot be found, fails to import, throws while starting, returns an invalid extension, or reuses a
+  taken name is skipped. The
   service still starts. The log has `plugin_problem` with the reason, each allowed user gets one short chat line after
   start, and `/status` lists it under problems.
 - If you remove a plugin, or it breaks, while one of its tool calls is unfinished, the model gets that call back as an
