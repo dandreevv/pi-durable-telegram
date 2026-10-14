@@ -83,6 +83,8 @@ test("credential store: the file mutex excludes another process", async () => {
 		const child = spawn(process.execPath, [join(import.meta.dirname, "../fixtures/credential-writer.ts"), path, "30"], {
 			stdio: "inherit",
 		});
+		// Listen at once: under load the child can finish before our loop does, and a missed "exit" never resolves.
+		const exited = new Promise<number | null>((resolve) => child.on("exit", resolve));
 		const store = new FileCredentialStore(path);
 		for (let i = 0; i < 30; i++) {
 			await store.modify("count", async (current) => ({
@@ -90,7 +92,7 @@ test("credential store: the file mutex excludes another process", async () => {
 				key: String(Number(current?.type === "api_key" ? current.key : 0) + 1),
 			}));
 		}
-		const code = await new Promise<number | null>((resolve) => child.on("exit", resolve));
+		const code = await exited;
 		assert.equal(code, 0);
 		assert.deepEqual(await store.read("count"), { type: "api_key", key: "60" });
 	} finally {
