@@ -165,3 +165,25 @@ for (const [label, after] of [
 		assert.equal(notices.length, label === "broken" ? 1 : 0);
 	});
 }
+
+test("T-plugin-builtin: the built-in skills plugin puts its section into the request", async () => {
+	const { dir, port, config } = await setup("skills", async (root) => {
+		await writeFiles({
+			[join(root, "work", "skills", "tidy", "SKILL.md")]: "---\nname: tidy\ndescription: Tidy up\n---\n",
+		});
+	});
+	const faux = newFaux();
+	let prompt = "";
+	faux.setResponses([
+		(context) => {
+			const system = context.messages as unknown as { role: string; sections?: Record<string, string | null> }[];
+			prompt = system.flatMap((m) => (m.role === "system" ? Object.values(m.sections ?? {}) : [])).join("\n");
+			return fauxAssistantMessage("ok");
+		},
+	]);
+	const t = await startTestAgent({ dir, faux, port, config, deps: { pluginEnv: { HOME: dir } } });
+	cleanups.push(() => t.close());
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 1, "hi"));
+	await waitFor(() => port.textsIn(CHAT).includes("ok"));
+	assert.match(prompt, /<skills>\n.*read tool.*\n- tidy: Tidy up\n {2}\S+tidy\/SKILL\.md\n<\/skills>/);
+});

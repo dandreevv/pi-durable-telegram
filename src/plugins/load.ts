@@ -26,7 +26,9 @@ export type LoadedPlugins = {
 };
 type Base = Pick<PluginContext, "env" | "workdir" | "dataDir" | "log">;
 
-const BUILTIN: Record<string, () => Promise<{ default: unknown }>> = {};
+const BUILTIN: Record<string, () => Promise<{ default: unknown }>> = {
+	skills: () => import("./skills.ts"),
+};
 const LOAD_MS = 60_000;
 
 /** Where `npm install --prefix` puts npm plugins. */
