@@ -180,7 +180,7 @@ async function sendNew(job: Job, chunk: Chunk, first: boolean): Promise<Sent> {
 	const { port } = job;
 	const { chatId, messageId } = job.task.input;
 	const signal = job.runtime.signal;
-	const replyTo = first ? { replyTo: messageId } : {};
+	const replyTo = first && messageId !== undefined ? { replyTo: messageId } : {};
 	if (chunk.rich !== undefined) {
 		const rich = chunk.rich;
 		return port.sendMessage(chatId, rich, { rich: true, ...replyTo }, signal).then(

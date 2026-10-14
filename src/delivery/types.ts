@@ -6,9 +6,9 @@ import type { TelegramPort } from "../telegram/port.ts";
 
 export type DeliverInput = {
 	chatId: number;
-	/** The user's Telegram message; the answer replies to it. */
-	messageId: number;
-	/** Durable request id of the submission: `tg:<chat>:<message>`. */
+	/** The user's Telegram message; the answer replies to it. Absent for a wake that answers no message (a reminder). */
+	messageId?: number;
+	/** Durable request id of the submission: `tg:<chat>:<message>` (`remind:<id>:<due>` for a reminder). */
 	requestId: string;
 	/** pi-ai `UserInput`. */
 	content: JsonValue;
