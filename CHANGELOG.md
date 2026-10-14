@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.5 (2026-10-14)
 
 - `helpers`: the `helper` tool hands a self-contained task to a helper agent with the same tools (without `helper`
   itself) and returns its final answer. Several calls in one answer run at once, up to `PI_HELPERS_MAX` (default 4)
