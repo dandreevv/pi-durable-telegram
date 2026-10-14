@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Plugins, off by default: `PI_PLUGINS` lists built-in plugins, local folders or npm packages installed in
+  `<PI_DATA_DIR>/plugins`. A plugin that fails to load is skipped: the daemon starts, the log says why, each allowed
+  user gets one line in the chat and `/status` lists loaded and failed plugins. A tool call left unfinished by a
+  removed or broken plugin comes back to the model as an error and never blocks startup.
+- `search`: the `web_search` tool over Tavily, Exa, Brave or Parallel. Results are marked as untrusted web data.
+- `mcp`: tools of the MCP servers in `.mcp.json` (stdio and HTTP), named `mcp__<server>__<tool>`. A server that fails
+  to start is reported while the others load; MCP servers get no secrets unless their config names them.
+- `skills`: one prompt section lists the skills in `<PI_WORKDIR>/skills`, pi's skills folder and `PI_SKILLS_DIRS`;
+  the agent reads a skill's `SKILL.md` when a task matches.
+
 ## 0.1.3 (2026-10-14)
 
 - Published on npm: `npm install -g pi-durable-telegram`, and `pi install npm:pi-durable-telegram` for the setup skill.

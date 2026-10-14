@@ -19,6 +19,14 @@ variables win over the file). Invalid values stop the daemon at start with one l
 | `TELEGRAM_API_ROOT` | no | `https://api.telegram.org` | Bot API server (for a local Bot API server) |
 | `TELEGRAM_RICH` | no | `auto` | `auto`: answers are rich messages (tables, task lists, folds, buttons) streamed as native drafts with a stop button; `never`: Telegram HTML messages streamed by editing one message |
 | `PI_LOG_LEVEL` | no | `info` | `debug`, `info`, `warn` or `error` |
+| `PI_PLUGINS` | no | none | Comma-separated plugins to load: `search`, `mcp`, `skills`, a path (absolute, `~` or relative to `PI_WORKDIR`) or an npm package installed in `<PI_DATA_DIR>/plugins`; see [plugins](plugins.md) |
+| `PI_SEARCH_PROVIDER` | no | first key found | `search` plugin: `tavily`, `exa`, `brave` or `parallel` |
+| `TAVILY_API_KEY` | no | | `search` plugin: Tavily key |
+| `EXA_API_KEY` | no | | `search` plugin: Exa key |
+| `BRAVE_API_KEY` | no | | `search` plugin: Brave Search API key |
+| `PARALLEL_API_KEY` | no | | `search` plugin: Parallel key |
+| `PI_MCP_CONFIG` | no | `<PI_WORKDIR>/.mcp.json` | `mcp` plugin: the MCP servers file (absolute, `~` or relative to `PI_WORKDIR`) |
+| `PI_SKILLS_DIRS` | no | | `skills` plugin: more comma-separated skill folders, after `<PI_WORKDIR>/skills` and pi's `~/.pi/agent/skills` |
 
 Example `~/.config/pi-durable-telegram/env`:
 
@@ -27,6 +35,8 @@ TELEGRAM_BOT_TOKEN=123456789:AA...
 TELEGRAM_ALLOWED_USER_IDS=111111111
 PI_WORKDIR=/home/me/projects
 DEEPGRAM_API_KEY=...
+PI_PLUGINS=search,skills
+TAVILY_API_KEY=...
 ```
 
 ---
