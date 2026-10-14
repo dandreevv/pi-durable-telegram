@@ -40,7 +40,7 @@ export function createSendFileTool(deps: SendFileDeps): ToolRegistration {
 }
 
 function failure(text: string): ToolExecutionResult {
-	return { content: [{ type: "text", text }], isError: true };
+	return { output: [{ type: "text", text }], isError: true };
 }
 
 async function sendFile(
@@ -102,7 +102,7 @@ async function upload(job: Upload, deps: SendFileDeps, context: Context): Promis
 		.catch(() => undefined);
 	try {
 		const kind = await sendOnce(port, job, signal);
-		return { content: [{ type: "text", text: `Sent ${basename(job.path)} (${mb(job.size)} MB) as ${kind}.` }] };
+		return { output: [{ type: "text", text: `Sent ${basename(job.path)} (${mb(job.size)} MB) as ${kind}.` }] };
 	} catch (error) {
 		deps.log.warn("send_file_failed", telegramErrorSummary(error));
 		return failure(uploadFailureText(error));

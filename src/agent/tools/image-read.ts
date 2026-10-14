@@ -85,11 +85,11 @@ async function inspectImage(path: string, api: ToolExecutionApi, context: Contex
 	if (!info.ok || !header.ok || probeImage(header.value) === undefined) return undefined;
 	const model = await modelOf(api.models, (await api.agent(context)).model);
 	const check = checkImage(header.value, info.value.size, maxImageBytes(model));
-	if (!check.ok) return { content: [text(check.reason)], isError: true };
+	if (!check.ok) return { output: [text(check.reason)], isError: true };
 	const { width, height, mime } = check.probe;
 	const size = `${width ?? "?"}x${height ?? "?"}, ${megabytes(info.value.size)} MB`;
 	const details: ImageDetails = { imagePath: canonical.value, mime };
-	return { content: [text(`Image ${canonical.value} (${size}) is attached for viewing.`)], details };
+	return { output: [text(`Image ${canonical.value} (${size}) is attached for viewing.`)], details };
 }
 
 function text(value: string): TextContent {

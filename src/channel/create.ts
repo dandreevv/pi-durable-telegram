@@ -39,7 +39,7 @@ export type TelegramChannelOptions = {
 	readonly models?: Models;
 	/** Replace the grammY transport (tests, proxies). Polling still uses grammY with `botToken`. */
 	readonly port?: TelegramPort;
-	/** The service cannot continue (poisoned storage, bad token, another poller). Default: log and exit. */
+	/** The service cannot continue (failed storage, bad token, another poller). Default: log and exit. */
 	readonly onFatal?: FatalHandler;
 	/** Minimum pause between preview edits (default 1000 ms). */
 	readonly previewIntervalMs?: number;
@@ -165,6 +165,10 @@ class Lifecycle {
 	async start(harness: Harness, context: Context, polling: boolean): Promise<void> {
 		const rt = this.#runtime(harness);
 		this.#rt = rt;
+		// A failed Session aborts running work before it can report; this is the one place it becomes fatal.
+		void harness.closed.then((end) => {
+			if (end.reason === "failed") this.#d.onFatal("storage failure", end.error);
+		});
 		const changed = await rt.directory.reconfigureAll(context);
 		if (changed > 0) this.#d.log.info("chats_reconfigured", { count: changed });
 		await this.#d.port.setMyCommands(COMMANDS).catch((error: unknown) => {

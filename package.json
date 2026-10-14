@@ -57,9 +57,9 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@earendil-works/chord": "1.1.0",
-    "@earendil-works/pi-ai": "1.1.0",
-    "@earendil-works/pi-durable": "1.1.0",
+    "@earendil-works/chord": "1.2.0",
+    "@earendil-works/pi-ai": "1.2.0",
+    "@earendil-works/pi-durable": "1.2.0",
     "grammy": "1.46.0",
     "proper-lockfile": "4.1.2"
   },
@@ -71,8 +71,8 @@
     "typescript": "7.0.2"
   },
   "overrides": {
-    "@earendil-works/pi-ai": "1.1.0",
-    "@earendil-works/chord": "1.1.0"
+    "@earendil-works/pi-ai": "1.2.0",
+    "@earendil-works/chord": "1.2.0"
   },
   "homepage": "https://github.com/smixs/pi-durable-telegram#readme",
   "bugs": {

@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import { BACKGROUND_CONTEXT as BG } from "@earendil-works/chord/context";
 import { type FauxProviderHandle, fauxAssistantMessage } from "@earendil-works/pi-ai";
-import type { Harness } from "@earendil-works/pi-durable";
+import { type Harness, SessionFailed } from "@earendil-works/pi-durable";
 import { NEW_REPLY } from "../../src/channel/commands/new.ts";
 import { ConversationDirectory } from "../../src/channel/conversations.ts";
 import { ChatMap } from "../../src/channel/docs.ts";
@@ -236,7 +236,7 @@ test("T-stt-errors: without a transcript the audio is saved as a file and the mo
 });
 
 test("T-fatal-poison: a poisoned session is fatal for the service", async () => {
-	const poisoned = new Error("Session is poisoned by a failed commit after storage admission; reopen it");
+	const poisoned = new SessionFailed(new Error("disk"));
 	const harness = {
 		commit: async () => {
 			throw poisoned;
