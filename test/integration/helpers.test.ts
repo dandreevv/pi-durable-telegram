@@ -257,3 +257,41 @@ test("T-helper-restart: a restart mid-helper resumes the same child without a se
 		"one submission in the child",
 	);
 });
+
+test("T-helper-plugin-off: a helper left running, then the plugin removed: the daemon starts and nothing hangs", async () => {
+	const { dir, cleanup } = await tempDir();
+	cleanups.push(cleanup);
+	const first = newFaux();
+	let childStarted = false;
+	const child: FauxResponseFactory = (context, options, state, model) => {
+		childStarted = true;
+		return untilAborted(context, options, state, model);
+	};
+	first.setResponses(many(router({ seen: [], parent: delegate("left running"), child })));
+	const one = await setup(first, { dir });
+	await one.t.agent.channel.handleUpdate(textUpdate(CHAT, 1, "go"));
+	await waitFor(() => childStarted, { what: "helper running" });
+	await one.t.close();
+
+	const second = newFaux();
+	let seen = "";
+	second.setResponses(
+		many((context) => {
+			if (lastUserText(context.messages) === "left running") return fauxAssistantMessage("late child answer");
+			const result = results(context.messages).at(-1);
+			seen = `${result?.isError}:${textOf(result)}`;
+			return fauxAssistantMessage("recovered");
+		}),
+	);
+	const two = await setup(second, { dir, config: { PI_PLUGINS: "" } });
+	cleanups.push(() => two.t.close());
+	await waitFor(() => two.port.textsIn(CHAT).includes("recovered"), { what: "answer after restart" });
+	assert.match(seen, /^true:[\s\S]*Tool helper was interrupted/);
+	await two.t.agent.harness.waitForIdle(BG);
+	const live = (await two.t.agent.harness.inspect(BG)).tasks;
+	assert.deepEqual(
+		live.filter((task) => task.state.kind === "blocked"),
+		[],
+	);
+	assert.ok((await childTaskStates(two.t.agent.harness)).every((state) => ["aborted", "completed"].includes(state)));
+});

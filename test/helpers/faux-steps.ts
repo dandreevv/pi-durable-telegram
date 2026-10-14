@@ -1,4 +1,10 @@
-import { type FauxResponseStep, fauxAssistantMessage, fauxToolCall, type Message } from "@earendil-works/pi-ai";
+import {
+	type FauxResponseFactory,
+	type FauxResponseStep,
+	fauxAssistantMessage,
+	fauxToolCall,
+	type Message,
+} from "@earendil-works/pi-ai";
 
 export function gate(): { promise: Promise<void>; open(): void } {
 	let open = () => {};
@@ -17,7 +23,7 @@ export function gated(wait: Promise<void>, answer: () => ReturnType<typeof fauxA
 }
 
 /** A step that blocks until the request is aborted (a generation in flight at crash or /stop time). */
-export const untilAborted: FauxResponseStep = (_context, options) =>
+export const untilAborted: FauxResponseFactory = (_context, options) =>
 	new Promise((resolve) => {
 		const done = () =>
 			resolve(fauxAssistantMessage("", { stopReason: "aborted", errorMessage: "Request was aborted" }));
