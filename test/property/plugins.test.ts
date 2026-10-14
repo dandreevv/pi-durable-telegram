@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import fc from "fast-check";
 import { parseList } from "../../src/config/schema.ts";
+import { pluginKind } from "../../src/plugins/load.ts";
 import { parseFrontmatter } from "../../src/plugins/skills.ts";
 import { check } from "../helpers/property.ts";
 
@@ -25,6 +26,29 @@ test("P-plugin-list: items are trimmed, unique, non-empty, in first-appearance o
 		assert.deepEqual(items, expected);
 		return true;
 	});
+});
+
+const segment = fc.stringMatching(/^[a-z0-9][a-z0-9._-]{0,10}$/);
+
+test("P-plugin-kind: built-ins, scoped and plain npm names, paths and junk are told apart", (t) => {
+	for (const name of ["search", "mcp", "skills"]) assert.equal(pluginKind(name), "builtin");
+	check(
+		t,
+		fc.oneof(
+			segment.filter((name) => !["search", "mcp", "skills"].includes(name)).map((name) => [name, "npm"] as const),
+			fc.tuple(segment, segment).map(([scope, name]) => [`@${scope}/${name}`, "npm"] as const),
+			fc
+				.tuple(fc.constantFrom("./", "../", "~/", "/", "dir/"), segment)
+				.map(([prefix, name]) => [`${prefix}${name}`, "path"] as const),
+			fc
+				.tuple(segment, fc.constantFrom(" ", "!", "A", "$"))
+				.map(([name, bad]) => [`${bad}${name}`, undefined] as const),
+		),
+		([entry, kind]) => {
+			assert.equal(pluginKind(entry), kind, entry);
+			return true;
+		},
+	);
 });
 
 const text = fc

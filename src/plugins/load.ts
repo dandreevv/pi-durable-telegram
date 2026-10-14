@@ -28,6 +28,7 @@ type Base = Pick<PluginContext, "env" | "workdir" | "dataDir" | "log">;
 
 const BUILTIN: Record<string, () => Promise<{ default: unknown }>> = {
 	search: () => import("./search.ts"),
+	mcp: () => import("./mcp.ts"),
 	skills: () => import("./skills.ts"),
 };
 const LOAD_MS = 60_000;
