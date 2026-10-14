@@ -9,7 +9,9 @@
 - `reminders`: the `remind` tool adds (at a local time in `PI_TIMEZONE` or in minutes, once or `daily`, `weekdays`,
   `weekly` or every N minutes), lists and cancels reminders. A due reminder wakes the agent with its text in the chat,
   once per due time even across restarts; one missed while the service was down fires once after start, marked late.
-  Reminders of a plugin that is off are dropped at their due time and never block startup.
+  Reminders of a plugin that is off, or of a user taken off the allow-list, are dropped at their due time and never
+  block startup. `cancel` ends a reminder at once; a calendar repeat fires once per local date, also when the clock
+  goes back.
 - Plugins get `models` and `now()` in their context. Plugins still cannot define tasks.
 
 ## 0.1.4 (2026-10-14)

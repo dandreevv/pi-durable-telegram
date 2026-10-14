@@ -119,14 +119,16 @@ with ids and next times) and `cancel` (by id). When a reminder comes due, the ag
 | `PI_TIMEZONE` | the server's zone | IANA zone such as `Europe/Berlin` for times without an offset and for the date in the prompt |
 
 - A repeating reminder keeps its local time across daylight saving changes. A time skipped by the clock change is
-  refused for `add`; a repeat that falls into it moves past it that day.
-- At most 100 pending reminders per chat, at most 366 days ahead.
+  refused for `add`; a repeat that falls into it moves past it that day. A daily, weekday or weekly reminder fires at
+  most once per local date, also on the day the clock goes back.
+- At most 100 pending reminders per chat, at most 366 days ahead. `cancel` ends the reminder at once.
 - Reminders are stored durably. After a restart they wait again; one missed while the service was down fires once
   after start, marked late; a repeating one fires once and then goes on from its next time, it does not catch up every
   missed time. Each due time wakes the agent at most once, even across restarts.
 - `/new` keeps reminders. A reminder set by a helper goes to the main chat.
 - With `reminders` removed from `PI_PLUGINS`, a pending reminder is dropped at its due time without waking the agent
-  (the log says `reminder … dropped`). The service always starts.
+  (the log says `reminder … dropped`). The service always starts. The same happens to a reminder of a user taken off
+  `TELEGRAM_ALLOWED_USER_IDS`: it never wakes the agent or reaches that chat again.
 - There is no separate task list: ask the agent to keep lists in files in the working directory.
 
 ## Write your own
