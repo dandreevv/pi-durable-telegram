@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3 (2026-10-14)
 
 - Published on npm: `npm install -g pi-durable-telegram`, and `pi install npm:pi-durable-telegram` for the setup skill.
 - Answers are Telegram rich messages: tables, task lists, headings and `<details>` folds render natively. Long
