@@ -20,7 +20,6 @@ export type Plugin = (ctx: PluginContext) => Extension | Promise<Extension>;
 export type PluginProblem = { readonly plugin: string; readonly reason: string };
 export type PluginReport = { readonly loaded: readonly string[]; readonly problems: readonly PluginProblem[] };
 export type LoadedPlugins = {
-	readonly extensions: readonly Extension[];
 	readonly report: PluginReport;
 	close(): Promise<void>;
 };
@@ -32,6 +31,7 @@ const BUILTIN: Record<string, () => Promise<{ default: unknown }>> = {
 	skills: () => import("./skills.ts"),
 };
 const LOAD_MS = 60_000;
+const LATE = `did not finish loading in ${LOAD_MS / 1000} s`;
 
 /** Where `npm install --prefix` puts npm plugins. */
 export const pluginsDir = (dataDir: string): string => join(dataDir, "plugins");
@@ -51,11 +51,15 @@ export function pluginKind(entry: string): "builtin" | "npm" | "path" | undefine
 }
 
 /**
- * Load each plugin in order. A plugin that fails to resolve, import or build, defines tasks, or reuses a name in
- * `taken` (core extensions and tools, earlier plugins) is skipped and reported; the rest still load.
+ * Load and `install` each plugin in order. A plugin that fails to resolve, import, build or install, defines tasks, or
+ * reuses a name in `taken` (core extensions, tools and `section:` keys, earlier plugins) is skipped and reported.
  */
-export async function loadPlugins(entries: readonly string[], base: Base, taken: Set<string>): Promise<LoadedPlugins> {
-	const extensions: Extension[] = [];
+export async function loadPlugins(
+	entries: readonly string[],
+	base: Base,
+	taken: Set<string>,
+	install: (extension: Extension) => void,
+): Promise<LoadedPlugins> {
 	const loaded: string[] = [];
 	const problems: PluginProblem[] = [];
 	const closers: (() => unknown)[] = [];
@@ -65,17 +69,19 @@ export async function loadPlugins(entries: readonly string[], base: Base, taken:
 			base.log.warn("plugin_problem", { plugin, reason });
 		};
 		try {
-			const extension = await withTimeout(loadOne(plugin, { ...base, problem, onClose: (fn) => closers.push(fn) }));
-			claim(extension, taken);
-			extensions.push(extension);
+			const ctx = { ...base, problem, onClose: (fn: () => unknown) => closers.push(fn) };
+			const extension = await withTimeout(loadOne(plugin, ctx), LOAD_MS, LATE);
+			const names = claim(extension, taken);
+			install(extension); // pi-durable's own checks: section key format, duplicates within the extension
+			for (const name of names) taken.add(name);
 			loaded.push(plugin);
 			base.log.info("plugin_loaded", { plugin, tools: extension.tools?.length ?? 0 });
 		} catch (error) {
-			problem(`did not load: ${errorSummary(error).replace(/^Error: /, "")}`);
+			problem(`did not load: ${errorSummary(error).replace(/^(Type)?Error: /, "")}`);
 		}
 	}
 	const close = async () => void (await Promise.allSettled(closers.splice(0).map(async (fn) => fn())));
-	return { extensions, report: { loaded, problems }, close };
+	return { report: { loaded, problems }, close };
 }
 
 async function loadOne(plugin: string, ctx: PluginContext): Promise<Extension> {
@@ -111,20 +117,21 @@ function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
-function claim(extension: Extension, taken: Set<string>): void {
+function claim(extension: Extension, taken: Set<string>): string[] {
 	if (!isObject(extension) || typeof extension.name !== "string" || extension.name === "")
 		throw new Error("the plugin did not return an extension with a name");
 	if ((extension.tasks?.length ?? 0) > 0) throw new Error("plugins cannot define tasks yet");
-	const names = [extension.name, ...(extension.tools ?? []).map((tool) => tool.name)];
+	const sections = (extension.sections ?? []).map((section) => `section:${section.key}`);
+	const names = [extension.name, ...(extension.tools ?? []).map((tool) => tool.name), ...sections];
 	const clash = names.find((name) => taken.has(name));
 	if (clash !== undefined) throw new Error(`the name ${clash} is already taken`);
-	for (const name of names) taken.add(name);
+	return names;
 }
 
-function withTimeout<T>(work: Promise<T>): Promise<T> {
+export function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
 	let timer: NodeJS.Timeout | undefined;
 	const timeout = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => reject(new Error(`did not finish loading in ${LOAD_MS / 1000} s`)), LOAD_MS);
+		timer = setTimeout(() => reject(new Error(message)), ms);
 		timer.unref();
 	});
 	return Promise.race([work, timeout]).finally(() => clearTimeout(timer));

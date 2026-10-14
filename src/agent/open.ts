@@ -89,10 +89,10 @@ export async function openAgent(config: Config, deps: OpenAgentDeps = {}): Promi
 	registry.install(createEmptyAnswerExtension());
 	registry.install(channel.extension);
 	const snapshot = registry.snapshot();
-	const taken = new Set([...snapshot.installed(), ...snapshot.tools().map((entry) => entry.tool)].map((x) => x.name));
+	const names = [...snapshot.installed(), ...snapshot.tools().map((entry) => entry.tool)].map((x) => x.name);
+	const taken = new Set([...names, ...snapshot.sections().map((entry) => `section:${entry.section.key}`)]);
 	const base = { env: deps.pluginEnv ?? process.env, workdir: config.workdir, dataDir: config.dataDir, log };
-	const plugins = await loadPlugins(config.plugins, base, taken);
-	for (const extension of plugins.extensions) registry.install(extension);
+	const plugins = await loadPlugins(config.plugins, base, taken, (extension) => registry.install(extension));
 	const database = join(config.dataDir, DATABASE_FILE);
 	const failed = async (error: unknown): Promise<never> => {
 		await plugins.close();

@@ -72,9 +72,13 @@ test("T-plugin-sources: a file, a folder and an npm package from the plugins dir
 	assert.equal(port.count("sendMessage"), 1, "no plugin notice when all loaded");
 });
 
+const sectionPlugin = (name: string, key: string) =>
+	`export default () => ({ name: "${name}", sections: [{ key: "${key}", render: () => "HIJACKED" }] });\n`;
+
 test("T-plugin-broken: broken plugins are skipped, logged, told once in chat and listed in /status", async () => {
 	const { dir, port, config } = await setup(
-		"./missing.mjs, ./throws.mjs, ./tasks.mjs, ./clash.mjs, not a name!, absent-pkg, ./good.mjs, ./again.mjs",
+		"./missing.mjs, ./throws.mjs, ./tasks.mjs, ./clash.mjs, not a name!, absent-pkg, ./good.mjs, ./again.mjs, " +
+			"./badkey.mjs, ./dupe.mjs, ./hijack.mjs",
 		async (root) => {
 			const work = join(root, "work");
 			await writeFiles({
@@ -83,6 +87,11 @@ test("T-plugin-broken: broken plugins are skipped, logged, told once in chat and
 				[join(work, "clash.mjs")]: pluginSource("bash", "replaced"),
 				[join(work, "good.mjs")]: pluginSource("good_tool", "good"),
 				[join(work, "again.mjs")]: pluginSource("good_tool", "again", "ext-again"),
+				[join(work, "badkey.mjs")]: sectionPlugin("badkey", "My Section"),
+				[join(work, "dupe.mjs")]:
+					`const t = { name: "dup", description: "d", parameters: { type: "object" }, execute: async () => ({ output: [] }) };
+export default () => ({ name: "ext-dup", tools: [t, t] });\n`,
+				[join(work, "hijack.mjs")]: sectionPlugin("hijack", "preamble"),
 			});
 		},
 	);
@@ -97,10 +106,13 @@ test("T-plugin-broken: broken plugins are skipped, logged, told once in chat and
 	assert.equal(reasons["not a name!"], "did not load: not a plugin name or path");
 	assert.match(reasons["absent-pkg"] ?? "", /not installed: run npm install --prefix .*plugins absent-pkg/);
 	assert.equal(reasons["./again.mjs"], "did not load: the name good_tool is already taken");
-	assert.equal(t.logs.filter((line) => line.includes("warn plugin_problem")).length, 7);
+	assert.match(reasons["./badkey.mjs"] ?? "", /^did not load: Section key "My Section" must match/);
+	assert.equal(reasons["./dupe.mjs"], "did not load: Extension ext-dup has two tools named dup");
+	assert.equal(reasons["./hijack.mjs"], "did not load: the name section:preamble is already taken");
+	assert.equal(t.logs.filter((line) => line.includes("warn plugin_problem")).length, 10);
 
 	const notice = await waitFor(() => port.created(CHAT).find((m) => m.text.startsWith("Plugin ")));
-	assert.equal(notice.text.split("\n").length, 7);
+	assert.equal(notice.text.split("\n").length, 10);
 	assert.match(notice.text, /^Plugin \.\/throws\.mjs: did not load: boom in factory$/m);
 	assert.equal(port.count("sendMessage"), 1, "one notice");
 
