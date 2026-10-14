@@ -1,5 +1,5 @@
 import type { Context } from "@earendil-works/chord";
-import type { Conversation, Harness } from "@earendil-works/pi-durable";
+import type { Conversation, ConversationId, Harness, Tx } from "@earendil-works/pi-durable";
 import type { DeliverTask } from "../delivery/task.ts";
 import type { DeliverInput } from "../delivery/types.ts";
 import { INTAKE_RING_SIZE, Intake, pushRing } from "./docs.ts";
@@ -33,10 +33,21 @@ export function admit(
 	input: DeliverInput,
 	context: Context,
 ): Promise<"admitted" | "duplicate"> {
-	return conversation.commit(async (tx) => {
-		const intake = await tx.doc(Intake, conversation.id);
-		if (!pushRing(intake.keys, input.requestId, INTAKE_RING_SIZE)) return "duplicate";
-		await tx.createTask(deliver, input, { ownership: { kind: "conversation" }, background: true });
-		return "admitted";
-	}, context);
+	return conversation.commit(
+		async (tx) => ((await admitIn(tx, conversation.id, deliver, input)) ? "admitted" : "duplicate"),
+		context,
+	);
+}
+
+/** The body of `admit` inside a caller's commit; false when `input.requestId` was already admitted. */
+export async function admitIn(
+	tx: Tx,
+	conversationId: ConversationId,
+	deliver: DeliverTask,
+	input: DeliverInput,
+): Promise<boolean> {
+	if (!pushRing((await tx.doc(Intake, conversationId)).keys, input.requestId, INTAKE_RING_SIZE)) return false;
+	const options = { ownership: { kind: "conversation" }, background: true, conversationId } as const;
+	await tx.createTask(deliver, input, options);
+	return true;
 }

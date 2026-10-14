@@ -1,5 +1,6 @@
 import { defineDoc, defineTask, type NextTaskState, type TaskRuntime, type Tx } from "@earendil-works/pi-durable";
-import { ChatInfo, INTAKE_RING_SIZE, Intake, pushRing } from "../../channel/docs.ts";
+import { ChatInfo } from "../../channel/docs.ts";
+import { admitIn } from "../../channel/intake.ts";
 import { DELIVER_TASK, type DeliverTask } from "../../delivery/task.ts";
 import { type Every, formatLocal, nextOccurrence } from "./time.ts";
 
@@ -40,17 +41,10 @@ async function fire(tx: Tx, runtime: TaskRuntime<Input, State, null, object>, id
 		runtime.report(new Error(`reminder ${id} dropped: the reminders plugin is off`));
 		return DONE;
 	}
-	const key = `remind:${id}:${due}`;
-	if (pushRing((await tx.doc(Intake, runtime.conversationId)).keys, key, INTAKE_RING_SIZE)) {
-		const chatId = (await tx.doc(ChatInfo, runtime.conversationId)).chatId;
-		const deliver = runtime.registry.task(DELIVER_TASK) as unknown as DeliverTask;
-		const content = wakeNote(id, entry, due, runtime.now());
-		await tx.createTask(
-			deliver,
-			{ chatId, requestId: key, content },
-			{ ownership: { kind: "conversation" }, background: true },
-		);
-	}
+	const chatId = (await tx.doc(ChatInfo, runtime.conversationId)).chatId;
+	const deliver = runtime.registry.task(DELIVER_TASK) as unknown as DeliverTask;
+	const content = wakeNote(id, entry, due, runtime.now());
+	await admitIn(tx, runtime.conversationId, deliver, { chatId, requestId: `remind:${id}:${due}`, content });
 	const next = nextOccurrence(entry, due, runtime.now());
 	if (next === undefined) {
 		delete doc.items[id];
