@@ -127,6 +127,7 @@ export function createTelegramChannel(options: TelegramChannelOptions): Telegram
 		compactReport,
 		port: () => port,
 		log,
+		allowed: new Set(options.allowedUserIds),
 		...(options.limits?.uploadBytes === undefined ? {} : { uploadLimit: options.limits.uploadBytes }),
 	});
 	const lifecycle = new Lifecycle({ options, log, onFatal, bot, port, deliver, compactReport });

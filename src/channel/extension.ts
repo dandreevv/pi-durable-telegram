@@ -1,7 +1,7 @@
 import { defineExtension, type Extension } from "@earendil-works/pi-durable";
 import type { CompactReportTask } from "../delivery/compact-report.ts";
 import type { DeliverTask } from "../delivery/task.ts";
-import { ReminderTask } from "../plugins/reminders/task.ts";
+import { createReminderTask } from "../plugins/reminders/task.ts";
 import type { Logger } from "../runtime/log.ts";
 import type { TelegramPort } from "../telegram/port.ts";
 import { createSendFileTool } from "../telegram/send-file.ts";
@@ -15,6 +15,7 @@ export function createTelegramExtension(options: {
 	compactReport: CompactReportTask;
 	port: () => TelegramPort;
 	log: Logger;
+	allowed: ReadonlySet<number>;
 	uploadLimit?: number;
 }): Extension {
 	const sendFile = createSendFileTool({
@@ -24,7 +25,7 @@ export function createTelegramExtension(options: {
 	});
 	return defineExtension({
 		name: "telegram",
-		tasks: [options.deliver, options.compactReport, ReminderTask],
+		tasks: [options.deliver, options.compactReport, createReminderTask(options.allowed)],
 		tools: [sendFile],
 	});
 }

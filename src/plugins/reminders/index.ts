@@ -11,7 +11,7 @@ import {
 } from "@earendil-works/pi-durable";
 import { ChatInfo, ChatMap } from "../../channel/docs.ts";
 import type { PluginContext } from "../load.ts";
-import { type Reminder, Reminders, ReminderTask } from "./task.ts";
+import { REMIND_TASK, type Reminder, Reminders, type ReminderTask } from "./task.ts";
 import { type Every, formatLocal, parseAt, parseEvery, serverZone, validZone, wallOf } from "./time.ts";
 
 export const MAX_PENDING = 100;
@@ -66,7 +66,7 @@ async function add(args: Args, api: ToolExecutionApi, context: Context, options:
 			throw new Error(`${MAX_PENDING} reminders are pending; cancel some first`);
 		doc.items[id] = entry;
 		await tx.createTask(
-			ReminderTask,
+			api.registry.task(REMIND_TASK) as unknown as ReminderTask,
 			{ id, due },
 			{ ownership: { kind: "conversation" }, background: true, conversationId: root },
 		);

@@ -10,7 +10,7 @@ import {
 } from "@earendil-works/pi-ai";
 import type { ConversationId, Harness } from "@earendil-works/pi-durable";
 import { ChatMap } from "../../src/channel/docs.ts";
-import { Reminders, ReminderTask } from "../../src/plugins/reminders/task.ts";
+import { createReminderTask, Reminders } from "../../src/plugins/reminders/task.ts";
 import { CHAT, newFaux, startTestAgent, type TestAgent, tempDir } from "../helpers/agent.ts";
 import { sleep, waitFor } from "../helpers/env.ts";
 import { FakeTelegram } from "../helpers/fake-telegram.ts";
@@ -45,13 +45,16 @@ function agentSteps(script: FauxResponseStep[], results: Result[] = []): FauxRes
 
 async function start(
 	faux: FauxProviderHandle,
-	options: { dir: string; port: FakeTelegram; now: () => number; plugins?: string },
+	options: { dir: string; port: FakeTelegram; now: () => number; plugins?: string; allowed?: string },
 ): Promise<TestAgent> {
 	const t = await startTestAgent({
 		dir: options.dir,
 		faux,
 		port: options.port,
-		config: { PI_PLUGINS: options.plugins ?? "reminders" },
+		config: {
+			PI_PLUGINS: options.plugins ?? "reminders",
+			...(options.allowed === undefined ? {} : { TELEGRAM_ALLOWED_USER_IDS: options.allowed }),
+		},
 		deps: { now: options.now, pluginEnv: { PI_TIMEZONE: TZ } },
 	});
 	return t;
@@ -183,7 +186,7 @@ test("T-remind-due: a due reminder wakes the agent once, survives /new, answers 
 		const entry = { text: "stretch", next: due, wall: "12:03", tz: TZ, setAt: startAt };
 		(await tx.doc(Reminders, conversation)).items[id] = entry;
 		const options = { ownership: { kind: "conversation" as const }, background: true, conversationId: conversation };
-		await tx.createTask(ReminderTask, { id, due }, options);
+		await tx.createTask(createReminderTask(new Set([CHAT])), { id, due }, options);
 	}, BG);
 	await waitFor(async () => (await remindTasks(harness)).every((task) => task.state.status === "terminal"));
 	await sleep(300);
@@ -277,4 +280,34 @@ test("T-remind-plugin-off: a pending reminder with the plugin removed: the daemo
 	await sleep(200);
 	assert.equal(second.state.callCount, 0, "no wake");
 	assert.deepEqual(port.textsIn(CHAT), ["Set."]);
+});
+
+test("T-remind-revoked: a reminder of a user taken off the allow-list is dropped at its due time: no wake, no answer", async () => {
+	const { dir, port } = await room();
+	const faux = newFaux();
+	faux.setResponses(
+		agentSteps([
+			toolCall("remind", { op: "add", text: "standup", at: "2026-10-14T13:00", every: "daily" }),
+			fauxAssistantMessage("Set."),
+		]),
+	);
+	const first = await start(faux, { dir, port, now: () => T0 });
+	await first.agent.channel.handleUpdate(textUpdate(CHAT, 1, "standup daily"));
+	await waitFor(() => port.textsIn(CHAT).includes("Set."), { what: "set" });
+	await first.close();
+
+	const second = newFaux();
+	second.setResponses(agentSteps([]));
+	const t2 = await start(second, { dir, port, now: () => T0 + DAY, allowed: "999" });
+	cleanups.push(() => t2.close());
+	const harness = t2.agent.harness;
+	await waitFor(async () => (await remindTasks(harness)).every((task) => task.state.status === "terminal"), {
+		what: "reminder task ended",
+	});
+	assert.ok(t2.logs.some((line) => /reminder r\d+ dropped: its chat is no longer allowed/.test(line)));
+	assert.deepEqual((await harness.snapshot(Reminders, await conversationId(harness), BG))?.items, {});
+	await sleep(200);
+	assert.equal(second.state.callCount, 0, "no wake");
+	assert.deepEqual(port.textsIn(CHAT), ["Set."]);
+	assert.equal((await harness.commit((tx) => tx.scanTasks({ kind: "tg.deliver" }, 100), BG)).items.length, 1);
 });
