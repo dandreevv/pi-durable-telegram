@@ -100,6 +100,8 @@ export function formatLocal(ms: number, tz: string): string {
 	return `${DAY_NAMES[weekday(t)]} ${t.y}-${pad(t.m)}-${pad(t.d)} ${pad(t.hh)}:${pad(t.mm)}`;
 }
 
+const dayKey = (t: Local): number => t.y * 10_000 + t.m * 100 + t.d;
+
 function fits(every: Every, day: number, firstDay: number): boolean {
 	if (every === "weekdays") return day >= 1 && day <= 5;
 	return every === "weekly" ? day === firstDay : true;
@@ -118,8 +120,10 @@ export function nextOccurrence(schedule: Schedule, due: number, now: number): nu
 	}
 	const [hh, mm] = wall.split(":").map(Number) as [number, number];
 	const start = zonedParts(Math.max(due, now), tz);
-	const firstDay = weekday(zonedParts(due, tz));
-	for (let i = 0; i <= 8; i++) {
+	const dueDay = zonedParts(due, tz);
+	const firstDay = weekday(dueDay);
+	// One occurrence per local date: the repeated hour of a fall-back day must not bring due's own date back.
+	for (let i = dayKey(start) === dayKey(dueDay) ? 1 : 0; i <= 8; i++) {
 		const date = new Date(Date.UTC(start.y, start.m - 1, start.d + i));
 		const local = { y: date.getUTCFullYear(), m: date.getUTCMonth() + 1, d: date.getUTCDate(), hh, mm };
 		const ms = zonedToUtc(local, tz);

@@ -72,6 +72,9 @@ test("nextOccurrence examples: DST fall-back keeps 09:00, missed days collapse, 
 	assert.equal(nextOccurrence({ ...tashkent, every: "weekly" }, fri, fri), Date.UTC(2026, 9, 23, 4, 0));
 	assert.equal(nextOccurrence({ ...tashkent, every: 30 }, fri, fri + 95 * MINUTE), fri + 120 * MINUTE);
 	assert.equal(nextOccurrence({ wall: "09:00", tz: "UTC" }, fri, fri), undefined);
+	const firstOfTwo = Date.UTC(2026, 9, 25, 0, 30); // Sun 02:30 CEST; 02:30 CET comes an hour later
+	const repeated = { every: "daily" as const, wall: "02:30", tz: "Europe/Berlin" };
+	assert.equal(nextOccurrence(repeated, firstOfTwo, firstOfTwo + 1000), Date.UTC(2026, 9, 26, 1, 30)); // Mon, not Sun again
 });
 
 test("P-parse-at: a local time round-trips, or it is refused only next to a clock change", (t) => {
@@ -109,6 +112,11 @@ const dayOf = (ms: number, tz: string) => {
 	return new Date(Date.UTC(p.y, p.m - 1, p.d)).getUTCDay();
 };
 
+const dateOf = (ms: number, tz: string) => {
+	const p = zonedParts(ms, tz);
+	return p.y * 10_000 + p.m * 100 + p.d;
+};
+
 /** The qualifying occurrence before `result`, stepping back over local dates. */
 function previous(rule: Every, result: number, wall: string, tz: string, firstDay: number): number {
 	const p = zonedParts(result, tz);
@@ -121,9 +129,12 @@ function previous(rule: Every, result: number, wall: string, tz: string, firstDa
 }
 
 test("P-next-occurrence: after now and due, the first such, aligned, on the right days at the wall time", (t) => {
-	const input = fc.tuple(local, zone, every, fc.integer({ min: -DAY, max: 40 * DAY }));
-	check(t, input, ([at, tz, rule, delta]) => {
-		const due = zonedToUtc(at, tz);
+	const input = fc.tuple(local, zone, every, fc.integer({ min: -DAY, max: 40 * DAY }), fc.constantFrom(0, 30, 60));
+	check(t, input, ([at, tz, rule, delta, back]) => {
+		const later = zonedToUtc(at, tz);
+		// Also the earlier of two equal wall times on a fall-back day, which zonedToUtc never returns.
+		const earlier = later - back * MINUTE;
+		const due = wallOf(earlier, tz) === wallOf(later, tz) && dayOf(earlier, tz) === dayOf(later, tz) ? earlier : later;
 		const wall = wallOf(due, tz);
 		const now = due + delta;
 		const next = nextOccurrence({ every: rule, wall, tz }, due, now);
@@ -140,7 +151,8 @@ test("P-next-occurrence: after now and due, the first such, aligned, on the righ
 			const p = zonedParts(next, tz);
 			assert.throws(() => parseAt(`${p.y}-${pad(p.m)}-${pad(p.d)}T${wall}`, tz), /does not exist/);
 		}
-		assert.ok(previous(rule, next, wall, tz, firstDay) <= base, "no earlier qualifying day");
+		assert.ok(dateOf(next, tz) > dateOf(due, tz), "one occurrence per local date");
+		assert.ok(previous(rule, next, wall, tz, firstDay) <= Math.max(base, later), "no earlier qualifying day");
 		assert.ok(next - base <= 7 * DAY + 3 * HOUR, "within a period");
 		return true;
 	});
