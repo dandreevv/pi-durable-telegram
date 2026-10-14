@@ -58,6 +58,7 @@ async function streamUntilSettled(
 	const port = deps.port();
 	const { chatId, messageId } = task.input;
 	const typing = new TypingPulse(port, chatId, runtime.signal);
+	const draft = deps.rich === true && task.state.checkpoint.preview === undefined;
 	const preview = new PreviewStreamer({
 		port,
 		chatId,
@@ -67,6 +68,7 @@ async function streamUntilSettled(
 		signal: runtime.signal,
 		now: () => runtime.now(),
 		...(deps.previewIntervalMs === undefined ? {} : { intervalMs: deps.previewIntervalMs }),
+		...(draft ? { draftId: Number(task.id) } : {}),
 		onCreated: (id) =>
 			runtime.commit((_tx, current) => running({ ...waitOf(current), preview: { messageId: id } }), context),
 	});
@@ -75,7 +77,7 @@ async function streamUntilSettled(
 	watch?.start(async (value) => {
 		const frame = tracker.update(value);
 		typing.set(frame.mine);
-		if (frame.mine && (frame.text !== "" || frame.hint !== undefined)) preview.push(frame);
+		if (frame.mine) preview.push(frame);
 	});
 	try {
 		return await submission.wait(context);

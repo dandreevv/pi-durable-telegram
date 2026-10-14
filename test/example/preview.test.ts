@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { PreviewStreamer, renderPreview } from "../../src/delivery/preview.ts";
+import { DRAFT_REFRESH_MS, PreviewStreamer, renderPreview } from "../../src/delivery/preview.ts";
+import { THINKING } from "../../src/format/rich.ts";
 import { silentLogger } from "../../src/runtime/log.ts";
 import { TelegramApiError } from "../../src/telegram/errors.ts";
 import { sleep, waitFor } from "../helpers/env.ts";
@@ -64,4 +65,42 @@ test("preview reuses an existing message and treats 'not modified' as success", 
 	await waitFor(() => port.textsIn(5)[0] === "new");
 	await streamer.close();
 	assert.equal(port.count("sendMessage"), 1);
+});
+
+test("draft: thinking first, then frames; a quiet run re-sends its draft before it expires", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1_000_000 });
+	const settle = async () => {
+		for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setImmediate(resolve));
+	};
+	const port = new FakeTelegram();
+	const streamer = new PreviewStreamer({
+		port,
+		chatId: 5,
+		replyTo: 1,
+		log: silentLogger,
+		messageId: undefined,
+		draftId: 7,
+		onCreated: async () => assert.fail("drafts create no message"),
+		intervalMs: 10,
+	});
+	streamer.push({ text: "", hint: undefined });
+	t.mock.timers.tick(10);
+	await settle();
+	streamer.push({ text: "", hint: "bash: npm test" });
+	t.mock.timers.tick(10);
+	await settle();
+	t.mock.timers.tick(DRAFT_REFRESH_MS);
+	await settle();
+	t.mock.timers.tick(10);
+	await settle();
+	await streamer.close();
+	assert.deepEqual(
+		port.drafts.map((draft) => [draft.draftId, draft.markdown]),
+		[
+			[7, THINKING],
+			[7, "⚙ bash: npm test"],
+			[7, "⚙ bash: npm test"],
+		],
+	);
+	assert.equal(port.count("sendMessage"), 0);
 });
