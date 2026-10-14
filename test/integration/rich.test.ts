@@ -5,10 +5,10 @@ import { splitForTelegram } from "../../src/format/chunk.ts";
 import { stripButtons, THINKING } from "../../src/format/rich.ts";
 import { TelegramApiError } from "../../src/telegram/errors.ts";
 import { CHAT, newFaux, startTestAgent, type TestAgent, tempDir } from "../helpers/agent.ts";
-import { waitFor } from "../helpers/env.ts";
+import { sleep, waitFor } from "../helpers/env.ts";
 import { FakeTelegram } from "../helpers/fake-telegram.ts";
-import { lastUserText, observe, words } from "../helpers/faux-steps.ts";
-import { callbackUpdate, textUpdate } from "../helpers/updates.ts";
+import { lastUserText, observe, untilAborted, words } from "../helpers/faux-steps.ts";
+import { callbackUpdate, stoppedUpdate, textUpdate } from "../helpers/updates.ts";
 
 const RICH = { TELEGRAM_RICH: "auto" };
 const QUESTION = `| a | b |\n|---|---|\n| 1 | 2 |\n\nUpdate now?\n\n<tg-button-row><tg-button type="callback_data" data="Да, обновляй">Да</tg-button><tg-button type="callback_data" data="Нет">Нет</tg-button></tg-button-row>`;
@@ -165,4 +165,21 @@ test("T-tap-old: a button of a message the bridge no longer knows still becomes 
 	await waitFor(() => port.textsIn(CHAT).includes("ok"), { what: "answer" });
 	assert.equal(seen[0], "Нет\n\n(button under your message: «Old question?»)");
 	assert.equal(port.count("editMessageText"), 0);
+});
+
+test("T-draft-stop: the draft's stop button stops the run like /stop; a redelivered or foreign stop does nothing", async () => {
+	const faux = newFaux();
+	faux.setResponses([untilAborted]);
+	const { t, port } = await setup(faux);
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 30, "long job"));
+	const draft = await waitFor(() => port.drafts[0], { what: "thinking draft" });
+	await t.agent.channel.handleUpdate(stoppedUpdate(222, draft.draftId));
+	const stop = stoppedUpdate(CHAT, draft.draftId);
+	await t.agent.channel.handleUpdate(stop);
+	await waitFor(() => port.textsIn(CHAT).includes("Stopped."), { what: "stopped" });
+	await delivered(t);
+	await t.agent.channel.handleUpdate(stop);
+	await sleep(300);
+	assert.deepEqual(port.textsIn(CHAT), ["Stopped."], "no answer, one confirmation, nothing for the stranger");
+	assert.ok(t.logs.some((line) => line.includes("update_ignored") && line.includes("chat=222")));
 });

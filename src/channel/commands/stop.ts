@@ -1,13 +1,13 @@
 import { BACKGROUND_CONTEXT as BG } from "@earendil-works/chord/context";
 import { InboxDoc, LiveDoc, UserEntry } from "@earendil-works/pi-durable";
 import { recordKey } from "../intake.ts";
-import { type MessageScope, reply } from "../scope.ts";
+import { type CommandScope, reply } from "../scope.ts";
 
 /**
- * /stop: abort the task that owns the current run (and with it its tool tasks), not the conversation, so queued
+ * /stop and a draft's stop button: abort the task that owns the current run (and with it its tool tasks), not the conversation, so queued
  * messages stay; then a passive write gives the conversation a boundary to place them.
  */
-export async function runStop(scope: MessageScope): Promise<void> {
+export async function runStop(scope: CommandScope): Promise<void> {
 	if (!(await recordKey(scope.conversation, scope.key, BG))) return;
 	const { harness } = scope.rt;
 	const id = scope.conversation.id;

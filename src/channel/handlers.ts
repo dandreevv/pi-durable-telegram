@@ -32,7 +32,7 @@ const MB = 1024 * 1024;
 
 /**
  * Handle one update: access gate, then a button tap, or a duplicate check and a command, text, attachment or voice
- * path that ends by admitting a delivery task. Whatever an allowed user sends reaches the model: a file is saved and named, anything
+ * path that ends by admitting a delivery task. A draft's stop button runs /stop. Whatever an allowed user sends reaches the model: a file is saved and named, anything
  * else is described; the model decides what to do with it. Never awaits a model run; long commands run detached.
  * Never throws.
  */
@@ -52,6 +52,7 @@ async function route(rt: ChannelRuntime, update: Update): Promise<void> {
 		return;
 	}
 	if (update.callback_query !== undefined) return handleTap(rt, update.callback_query);
+	if (update.stopped_message_generation !== undefined) return stopFromDraft(rt, access.chatId, update.update_id);
 	const message = update.message as Message;
 	const scope = await scopeFor(rt, message);
 	if (await isKnown(rt.harness, scope.conversation, scope.key, BG)) {
@@ -115,8 +116,15 @@ async function runCommand(scope: MessageScope, name: string, args: string): Prom
 	}
 }
 
+/** The stop button of a draft does what /stop does; the update id keeps a redelivered stop from running twice. */
+async function stopFromDraft(rt: ChannelRuntime, chatId: number, updateId: number): Promise<void> {
+	const conversation = await rt.directory.get(chatId, BG);
+	const scope = { rt, conversation, chatId, key: `tg:${chatId}:stop:${updateId}` };
+	detach(scope, "stop", () => runStop(scope));
+}
+
 /** Commands that wait on durable work run outside the update handler, so polling (and a later /stop) continues. */
-function detach(scope: MessageScope, name: string, work: () => Promise<void>): void {
+function detach(scope: Pick<MessageScope, "rt">, name: string, work: () => Promise<void>): void {
 	scope.rt.track(
 		work().catch((error: unknown) => {
 			if (isFatalHarnessError(error)) scope.rt.onFatal(`storage failure in /${name}`, error);
