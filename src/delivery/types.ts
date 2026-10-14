@@ -29,7 +29,7 @@ export type SendState = {
 	preview?: Preview;
 	/** Chunks delivered (or given up on) so far. */
 	sent: number;
-	/** Index of a non-idempotent send started but not recorded: its outcome is unknown after a crash. */
+	/** Index of a non-idempotent send started but not recorded: after a crash chunk 0 is sent again, others skipped. */
 	inFlight?: number;
 	messageIds: number[];
 	/** Some chunk's outcome is unknown. */

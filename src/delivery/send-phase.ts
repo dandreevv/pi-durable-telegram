@@ -37,8 +37,8 @@ type Job = { task: Task; runtime: Runtime; context: Context; deps: DeliveryDeps;
 
 /**
  * Phase `send`: render the outcome and deliver it chunk by chunk with durable progress. Chunk 0 edits the preview
- * when there is one (idempotent); other chunks are non-idempotent sends guarded by `inFlight`, so a crash between a
- * send and its record skips that chunk instead of sending it twice.
+ * when there is one (idempotent); other sends are guarded by `inFlight`. A crash between a send and its record skips
+ * a later chunk instead of sending it twice, but sends chunk 0 again: a rare duplicate beats a lost answer.
  */
 export async function sendPhase(task: Task, runtime: Runtime, context: Context, deps: DeliveryDeps): Promise<void> {
 	const job: Job = { task, runtime, context, deps, port: deps.port() };
@@ -94,7 +94,7 @@ async function deliverChunk(job: Job, index: number, chunk: Chunk, state: SendSt
 		const edited = await editWithRetries(job, preview.messageId, chunk);
 		if (edited !== undefined) return record(job, state, index, edited, chunk);
 	}
-	if (state.inFlight === index) {
+	if (state.inFlight === index && index > 0) {
 		job.deps.log.warn("delivery_unknown", { chat: job.task.input.chatId, chunk: index, reason: "restart during send" });
 		return record(job, state, index, { kind: "unknown" });
 	}

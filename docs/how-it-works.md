@@ -61,7 +61,7 @@ adds the Telegram side of the same promise:
 |---|---|
 | The process is killed while the model is answering | On start, `resume()` continues the run; the answer reaches the chat once |
 | Killed while a shell command runs | The model is told the tool was interrupted and decides what to do next |
-| Killed after the answer is stored but before Telegram got it | Delivery resumes from its stored progress; no duplicate message |
+| Killed after the answer is stored but before Telegram got it | Delivery resumes from its stored progress; a first message cut off mid-send is sent again (rarely twice), later parts never twice |
 | Telegram redelivers an update | The update id is already known; it is not submitted twice |
 | Killed while the answer streams as a draft | The draft disappears; the run resumes and the final answer is sent once |
 | You write while the agent is busy | The message is queued durably and answered after the current run |

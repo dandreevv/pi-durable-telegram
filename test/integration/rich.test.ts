@@ -6,7 +6,7 @@ import { stripButtons, THINKING } from "../../src/format/rich.ts";
 import { TelegramApiError } from "../../src/telegram/errors.ts";
 import { CHAT, newFaux, startTestAgent, type TestAgent, tempDir } from "../helpers/agent.ts";
 import { sleep, waitFor } from "../helpers/env.ts";
-import { FakeTelegram } from "../helpers/fake-telegram.ts";
+import { blockUntilAborted, FakeTelegram } from "../helpers/fake-telegram.ts";
 import { lastUserText, observe, untilAborted, words } from "../helpers/faux-steps.ts";
 import { callbackUpdate, stoppedUpdate, textUpdate } from "../helpers/updates.ts";
 
@@ -118,6 +118,35 @@ test("T-rich-crash: closed while the draft streams, reopened: the run resumes an
 		port.drafts.every((draft) => draft.draftId === draftId),
 		"the resumed run keeps its draft id",
 	);
+});
+
+test("T-rich-crash-final: closed while the final rich send is in flight; after reopen the answer is sent once", async () => {
+	const { dir, cleanup } = await tempDir();
+	cleanups.push(cleanup);
+	const port = new FakeTelegram();
+	const faux = newFaux();
+	faux.setResponses([fauxAssistantMessage("The answer")]);
+	let blocked = false;
+	const unhook = port.use((call, signal) => {
+		if (call.method === "sendMessage" && call.options?.rich === true) {
+			blocked = true;
+			return blockUntilAborted(signal);
+		}
+	});
+	const first = await startTestAgent({ dir, faux, port, config: RICH });
+	await first.agent.channel.handleUpdate(textUpdate(CHAT, 3, "go"));
+	await waitFor(() => blocked, { what: "final send in flight" });
+	await first.close();
+	unhook();
+	const idle = newFaux();
+	const second = await startTestAgent({ dir, faux: idle, port, config: RICH });
+	cleanups.push(() => second.close());
+	await delivered(second);
+	assert.deepEqual(
+		port.created(CHAT).map((m) => [m.text, m.rich, m.replyTo]),
+		[["The answer", true, 3]],
+	);
+	assert.equal(idle.state.callCount, 0, "the model is not called again");
 });
 
 test("T-tap: a tap is answered, admitted once as the user's reply with its context, and marks the choice", async () => {
