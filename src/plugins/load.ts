@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import type { MutableModels } from "@earendil-works/pi-ai";
 import type { Extension } from "@earendil-works/pi-durable";
 import { errorSummary, type Logger } from "../runtime/log.ts";
 
@@ -11,6 +12,10 @@ export type PluginContext = {
 	readonly workdir: string;
 	readonly dataDir: string;
 	readonly log: Logger;
+	/** The model catalog generation uses: a plugin may register another provider. */
+	readonly models: MutableModels;
+	/** The harness clock. */
+	readonly now: () => number;
 	/** A part of the plugin failed while the rest works: logged, told once in chat, listed in /status. */
 	readonly problem: (text: string) => void;
 	/** Runs at shutdown, after the harness has closed. */
@@ -23,7 +28,7 @@ export type LoadedPlugins = {
 	readonly report: PluginReport;
 	close(): Promise<void>;
 };
-type Base = Pick<PluginContext, "env" | "workdir" | "dataDir" | "log">;
+type Base = Omit<PluginContext, "problem" | "onClose">;
 
 const BUILTIN: Record<string, () => Promise<{ default: unknown }>> = {
 	search: () => import("./search.ts"),
