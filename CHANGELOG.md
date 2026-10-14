@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.4 (2026-10-14)
 
 - Plugins, off by default: `PI_PLUGINS` lists built-in plugins, local folders or npm packages installed in
   `<PI_DATA_DIR>/plugins`. A plugin that fails to load, returns an invalid extension or reuses a core name or section
