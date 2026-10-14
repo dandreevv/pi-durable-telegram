@@ -25,16 +25,33 @@ export function createGrammyPort(options: GrammyPortOptions): TelegramPort {
 	const pick = (o: SendOptions) => (o.fast === true ? fast : api);
 	return {
 		sendMessage: (chatId, text, o, signal) =>
-			guard("sendMessage", async () => (await pick(o).sendMessage(chatId, text, sendExtra(o), gs(signal))).message_id),
+			o.rich === true
+				? guard("sendRichMessage", async () => {
+						const sent = await pick(o).sendRichMessage(chatId, { markdown: text }, replyExtra(o), gs(signal));
+						return sent.message_id;
+					})
+				: guard(
+						"sendMessage",
+						async () => (await pick(o).sendMessage(chatId, text, sendExtra(o), gs(signal))).message_id,
+					),
 		editMessageText: (chatId, messageId, text, o, signal) =>
 			guard("editMessageText", async () => {
+				const content = o.rich === true ? { markdown: text } : text;
 				await pick(o).editMessageText(
 					chatId,
 					messageId,
-					text,
+					content,
 					o.html === true ? { parse_mode: "HTML" } : {},
 					gs(signal),
 				);
+			}),
+		sendDraft: (chatId, draftId, markdown, signal) =>
+			guard("sendRichMessageDraft", async () => {
+				await fast.sendRichMessageDraft(chatId, draftId, { markdown }, { can_stop: true }, gs(signal));
+			}),
+		answerCallbackQuery: (queryId) =>
+			guard("answerCallbackQuery", async () => {
+				await fast.answerCallbackQuery(queryId);
 			}),
 		sendChatAction: (chatId, action: ChatAction, signal) =>
 			guard("sendChatAction", async () => {
@@ -74,11 +91,15 @@ function gs(signal: AbortSignal | undefined): GrammySignal {
 function sendExtra(options: SendOptions) {
 	return {
 		...(options.html === true ? { parse_mode: "HTML" as const } : {}),
-		...(options.replyTo === undefined
-			? {}
-			: { reply_parameters: { message_id: options.replyTo, allow_sending_without_reply: true } }),
+		...replyExtra(options),
 		link_preview_options: { is_disabled: true },
 	};
+}
+
+function replyExtra(options: SendOptions) {
+	return options.replyTo === undefined
+		? {}
+		: { reply_parameters: { message_id: options.replyTo, allow_sending_without_reply: true } };
 }
 
 function captionExtra(caption: string | undefined) {

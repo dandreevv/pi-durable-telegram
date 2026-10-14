@@ -7,6 +7,7 @@ export type FakeMessage = {
 	chatId: number;
 	text: string;
 	html: boolean;
+	rich?: boolean;
 	replyTo?: number;
 	kind: "text" | "photo" | "document";
 	path?: string;
@@ -20,6 +21,9 @@ export class FakeTelegram implements TelegramPort {
 	readonly messages = new Map<number, FakeMessage>();
 	readonly calls: FakeCall[] = [];
 	readonly files = new Map<string, Uint8Array>();
+	/** Draft frames shown, in order, per chat. */
+	readonly drafts: { chatId: number; draftId: number; markdown: string }[] = [];
+	readonly answeredQueries: string[] = [];
 	commands: readonly BotCommandSpec[] = [];
 	#nextId = 1000;
 	#hooks: Hook[] = [];
@@ -58,6 +62,7 @@ export class FakeTelegram implements TelegramPort {
 			chatId,
 			text,
 			html: options.html === true,
+			...(options.rich === true ? { rich: true } : {}),
 			kind: "text",
 			...(options.replyTo === undefined ? {} : { replyTo: options.replyTo }),
 		});
@@ -80,6 +85,17 @@ export class FakeTelegram implements TelegramPort {
 			throw new TelegramApiError("editMessageText", 400, "Bad Request: message is not modified");
 		message.text = text;
 		message.html = options.html === true;
+		message.rich = options.rich === true;
+	}
+
+	async sendDraft(chatId: number, draftId: number, markdown: string, signal?: AbortSignal): Promise<void> {
+		await this.#enter({ method: "sendDraft", chatId, messageId: draftId, text: markdown }, signal);
+		this.drafts.push({ chatId, draftId, markdown });
+	}
+
+	async answerCallbackQuery(queryId: string): Promise<void> {
+		await this.#enter({ method: "answerCallbackQuery", text: queryId }, undefined);
+		this.answeredQueries.push(queryId);
 	}
 
 	async sendChatAction(chatId: number, action: ChatAction, signal?: AbortSignal): Promise<void> {

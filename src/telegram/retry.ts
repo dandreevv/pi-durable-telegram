@@ -4,6 +4,7 @@ import { TelegramUnavailable, TelegramUnknown } from "./errors.ts";
 
 const NON_IDEMPOTENT = new Set([
 	"sendMessage",
+	"sendRichMessage",
 	"sendPhoto",
 	"sendDocument",
 	"sendMediaGroup",

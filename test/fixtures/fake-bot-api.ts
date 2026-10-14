@@ -68,6 +68,7 @@ export class FakeBotApi {
 			case "getUpdates":
 				return this.#getUpdates(body, gone);
 			case "sendMessage":
+			case "sendRichMessage":
 				return this.#send(body);
 			case "editMessageText":
 				return this.#edit(body);
@@ -121,17 +122,18 @@ export class FakeBotApi {
 	#send(body: Record<string, unknown>): unknown {
 		const id = this.#nextMessageId++;
 		const reply = body.reply_parameters as { message_id?: number } | undefined;
+		const text = textOf(body);
 		this.messages.set(id, {
 			id,
 			chatId: Number(body.chat_id),
-			text: String(body.text),
+			text,
 			...(reply?.message_id === undefined ? {} : { replyTo: reply.message_id }),
 		});
 		return ok({
 			message_id: id,
 			date: 1,
 			chat: { id: Number(body.chat_id), type: "private" },
-			text: String(body.text),
+			text,
 		});
 	}
 
@@ -139,11 +141,17 @@ export class FakeBotApi {
 		const message = this.messages.get(Number(body.message_id));
 		if (message === undefined)
 			return { ok: false, error_code: 400, description: "Bad Request: message to edit not found" };
-		if (message.text === String(body.text))
+		if (message.text === textOf(body))
 			return { ok: false, error_code: 400, description: "Bad Request: message is not modified" };
-		message.text = String(body.text);
+		message.text = textOf(body);
 		return ok(true);
 	}
+}
+
+/** `text`, or the Markdown of a `rich_message`. */
+function textOf(body: Record<string, unknown>): string {
+	const rich = body.rich_message as { markdown?: string } | undefined;
+	return String(rich?.markdown ?? body.text);
 }
 
 function strip(update: Update): Update {

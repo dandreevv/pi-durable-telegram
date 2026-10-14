@@ -48,6 +48,8 @@ test("non-idempotent sends retry only 429; 5xx or network errors mean unknown ou
 	assert.equal(b.calls(), 1);
 	const c = harness([new Error("reset"), ok]);
 	await assert.rejects(c.call("sendDocument"), TelegramUnknown);
+	const rich = harness([r500, ok]);
+	await assert.rejects(rich.call("sendRichMessage"), TelegramUnknown, "a rich answer is never sent twice");
 	const d = harness([{ nonsense: true } as never]);
 	await assert.rejects(d.call("sendPhoto"), TelegramUnknown);
 	const e = harness([r429, r429, r429, r429]);
