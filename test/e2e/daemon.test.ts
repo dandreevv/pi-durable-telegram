@@ -62,7 +62,10 @@ function lockPid(dir: string): number | undefined {
 	return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as { pid: number }).pid : undefined;
 }
 
-test("E2E-kill9: SIGKILL mid-run; the next process takes over the lock, resumes, and the answer lands once in the same preview", {
+const draftOf = (call: { method: string; body: Record<string, unknown> }) =>
+	call.method === "sendRichMessageDraft" ? (call.body.rich_message as { markdown: string }).markdown : undefined;
+
+test("E2E-kill9: SIGKILL mid-run; the next process takes over the lock, resumes, and the rich answer lands once", {
 	timeout: 60_000,
 }, async () => {
 	const { dir, api, root, cleanup } = await setup();
@@ -73,16 +76,12 @@ test("E2E-kill9: SIGKILL mid-run; the next process takes over the lock, resumes,
 		await waitFor(() => api.count("getUpdates") > 0, { what: "polling", timeoutMs: 20_000 });
 		const update = textUpdate(CHAT, 1, "work");
 		api.enqueue(update);
-		const preview = await waitFor(() => [...api.messages.values()].find((m) => m.text.startsWith("Partial")), {
-			what: "preview",
+		const draft = await waitFor(() => api.calls.find((call) => draftOf(call)?.startsWith("Partial")), {
+			what: "draft",
 			timeoutMs: 20_000,
 		});
-		assert.equal(preview.replyTo, 1);
-		// An edit of the preview means its id was committed (a kill between the send and that commit is the documented
-		// orphan-preview window).
-		await waitFor(() => api.calls.some((c) => c.method === "editMessageText" && c.body.message_id === preview.id), {
-			what: "preview edited",
-		});
+		assert.equal(draft.body.can_stop, true);
+		assert.equal(draft.body.chat_id, CHAT);
 		first.process.kill("SIGKILL");
 		await first.exited;
 		assert.equal(lockPid(dir), first.process.pid, "stale lock left behind");
@@ -90,8 +89,8 @@ test("E2E-kill9: SIGKILL mid-run; the next process takes over the lock, resumes,
 		api.redeliver(update);
 		const second = spawnDaemon(dir, root, "fast");
 		children.push(second);
-		await waitFor(() => api.messages.get(preview.id)?.text === "final answer", {
-			what: "final in the preview",
+		await waitFor(() => api.textsIn(CHAT).includes("final answer"), {
+			what: "final answer",
 			timeoutMs: 20_000,
 		}).catch((error) => {
 			console.log(second.output.join(""));
@@ -99,6 +98,8 @@ test("E2E-kill9: SIGKILL mid-run; the next process takes over the lock, resumes,
 		});
 		assert.equal(lockPid(dir), second.process.pid, "lock taken over");
 		assert.equal(api.messages.size, 1, "one message in total");
+		assert.equal(api.count("sendRichMessage"), 1);
+		assert.equal([...api.messages.values()][0]?.replyTo, 1);
 		assert.equal(api.textsIn(CHAT).filter((text) => text === "final answer").length, 1);
 		await waitFor(() => second.output.join("").includes("update_duplicate"), { what: "redelivery dropped" }).catch(
 			(error) => {
@@ -123,10 +124,12 @@ test("E2E-sigterm: SIGTERM mid-stream exits 0, confirms the offset and releases 
 		await waitFor(() => api.count("getUpdates") > 0, { what: "polling", timeoutMs: 20_000 });
 		const update = textUpdate(CHAT, 1, "work");
 		api.enqueue(update);
-		await waitFor(() => [...api.messages.values()].some((m) => m.text.startsWith("Partial")), {
-			what: "preview",
+		await waitFor(() => api.calls.some((call) => draftOf(call)?.startsWith("Partial")), {
+			what: "draft",
 			timeoutMs: 20_000,
 		});
+		const polled = api.calls.find((call) => call.method === "getUpdates")?.body.allowed_updates;
+		assert.deepEqual(polled, ["message", "callback_query", "stopped_message_generation"]);
 		const started = Date.now();
 		child.process.kill("SIGTERM");
 		const { code } = await child.exited;
