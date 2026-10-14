@@ -7,6 +7,8 @@ export type Chunk = {
 	readonly html: string;
 	/** The Markdown slice this chunk came from, sent as plain text when Telegram rejects the HTML. */
 	readonly plain: string;
+	/** Rich Markdown: the chunk is a rich message (`html` unused). */
+	readonly rich?: string;
 };
 
 export const TELEGRAM_TEXT_LIMIT = 4096;

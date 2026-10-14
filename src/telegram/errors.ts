@@ -71,6 +71,11 @@ function classifyApiError(error: TelegramApiError): TelegramErrorKind {
 	return { kind: "rejected", description: text.slice(0, 200) };
 }
 
+/** Telegram answered 400: the request itself was refused, nothing was sent. */
+export function isBadRequest(error: unknown): boolean {
+	return error instanceof TelegramApiError && error.code === 400;
+}
+
 export function isAbort(error: unknown): boolean {
 	return error instanceof Error && (error.name === "AbortError" || /aborted|cancel/i.test(error.name));
 }

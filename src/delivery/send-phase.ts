@@ -11,8 +11,9 @@ import {
 import { Delivered } from "../channel/docs.ts";
 import { type Chunk, splitForTelegram } from "../format/chunk.ts";
 import { escapeHtml } from "../format/escape.ts";
+import { shortenButtonsData, splitRich, stripButtons } from "../format/rich.ts";
 import { errorSummary } from "../runtime/log.ts";
-import { classifyTelegramError, telegramErrorSummary } from "../telegram/errors.ts";
+import { classifyTelegramError, isBadRequest, telegramErrorSummary } from "../telegram/errors.ts";
 import type { TelegramPort } from "../telegram/port.ts";
 import { finalReplyText } from "./final-text.ts";
 import { stallsQueue, unansweredText } from "./outcome.ts";
@@ -40,17 +41,20 @@ type Job = { task: Task; runtime: Runtime; context: Context; deps: DeliveryDeps;
  */
 export async function sendPhase(task: Task, runtime: Runtime, context: Context, deps: DeliveryDeps): Promise<void> {
 	const job: Job = { task, runtime, context, deps, port: deps.port() };
-	const chunks = await renderOutcome(job);
 	let state = task.state.checkpoint;
-	for (let index = state.sent; index < chunks.length; index++) {
-		state = await deliverChunk(job, index, chunks[index] as Chunk, state);
+	let chunks = await renderOutcome(job, state);
+	while (state.sent < chunks.length) {
+		const next = await deliverChunk(job, state.sent, chunks[state.sent] as Chunk, state);
+		if (next.htmlFrom !== state.htmlFrom) chunks = await renderOutcome(job, next);
+		state = next;
 	}
 	await finish(job, state);
 }
 
-async function renderOutcome(job: Job): Promise<Chunk[]> {
-	const { outcome, preview } = job.task.state.checkpoint;
-	if (outcome.kind === "answer") return splitForTelegram(await answerText(job, outcome.entryId));
+async function renderOutcome(job: Job, state: SendState): Promise<Chunk[]> {
+	const { outcome, preview } = state;
+	if (outcome.kind === "answer")
+		return answerChunks(await answerText(job, outcome.entryId), job.deps.rich === true, state.htmlFrom);
 	if (outcome.kind === "shared") return preview === undefined ? [] : [plainChunk(SHARED_TEXT)];
 	const text = unansweredText(outcome.reason, outcome.detail, job.deps.model);
 	if (text !== undefined) return [plainChunk(text)];
@@ -62,11 +66,25 @@ async function answerText(job: Job, entryId: number): Promise<string> {
 	return finalReplyText(entry?.model?.[0]) ?? EMPTY_TEXT;
 }
 
+/** Rich messages up to `htmlFrom`, Telegram HTML from there on (buttons as labels); HTML only without rich mode. */
+function answerChunks(text: string, rich: boolean, htmlFrom: number | undefined): Chunk[] {
+	if (!rich) return splitForTelegram(text);
+	const parts = splitRich(shortenButtonsData(text));
+	const from = Math.min(htmlFrom ?? parts.length, parts.length);
+	const html = splitForTelegram(stripButtons(parts.slice(from).join("\n\n")));
+	return [...parts.slice(0, from).map((markdown) => ({ rich: markdown, html: "", plain: markdown })), ...html];
+}
+
 function plainChunk(text: string): Chunk {
 	return { html: escapeHtml(text), plain: text };
 }
 
-type Sent = { kind: "sent"; messageId: number } | { kind: "unknown" } | { kind: "failed" } | { kind: "gone" };
+type Sent =
+	| { kind: "sent"; messageId: number }
+	| { kind: "unknown" }
+	| { kind: "failed" }
+	| { kind: "gone" }
+	| { kind: "rejected" };
 type Edited = Sent | { kind: "unavailable" };
 
 async function deliverChunk(job: Job, index: number, chunk: Chunk, state: SendState): Promise<SendState> {
@@ -87,7 +105,8 @@ async function deliverChunk(job: Job, index: number, chunk: Chunk, state: SendSt
 
 async function record(job: Job, state: SendState, index: number, sent: Sent): Promise<SendState> {
 	const { inFlight: _cleared, ...rest } = state;
-	const next: SendState = { ...rest, sent: index + 1 };
+	// A refused rich message sent nothing: the same chunk index is delivered again as HTML.
+	const next: SendState = sent.kind === "rejected" ? { ...rest, htmlFrom: index } : { ...rest, sent: index + 1 };
 	if (sent.kind === "sent") next.messageIds = [...state.messageIds, sent.messageId];
 	if (sent.kind === "unknown" || state.unknown === true) next.unknown = true;
 	await save(job, next);
@@ -118,22 +137,33 @@ async function editWithRetries(job: Job, messageId: number, chunk: Chunk): Promi
 }
 
 async function editPreview(job: Job, messageId: number, chunk: Chunk): Promise<Edited> {
-	const { port } = job;
-	const { chatId } = job.task.input;
-	const signal = job.runtime.signal;
 	try {
-		await withPlainFallback(
-			() => port.editMessageText(chatId, messageId, chunk.html, { html: true }, signal),
-			() => port.editMessageText(chatId, messageId, chunk.plain, {}, signal),
-		);
+		await editChunk(job, messageId, chunk);
 		return { kind: "sent", messageId };
 	} catch (error) {
 		const kind = classifyTelegramError(error).kind;
 		if (kind === "not_modified") return { kind: "sent", messageId };
 		if (kind === "message_gone") return { kind: "gone" };
 		if (kind === "unavailable") return { kind: "unavailable" };
+		if (chunk.rich !== undefined && isBadRequest(error)) return rejected(job, error);
 		throw error;
 	}
+}
+
+function editChunk(job: Job, messageId: number, chunk: Chunk): Promise<void> {
+	const { port } = job;
+	const { chatId } = job.task.input;
+	const signal = job.runtime.signal;
+	if (chunk.rich !== undefined) return port.editMessageText(chatId, messageId, chunk.rich, { rich: true }, signal);
+	return withPlainFallback(
+		() => port.editMessageText(chatId, messageId, chunk.html, { html: true }, signal),
+		() => port.editMessageText(chatId, messageId, chunk.plain, {}, signal),
+	);
+}
+
+function rejected(job: Job, error: unknown): Sent {
+	job.deps.log.warn("rich_rejected", { chat: job.task.input.chatId, ...telegramErrorSummary(error) });
+	return { kind: "rejected" };
 }
 
 async function sendNew(job: Job, chunk: Chunk, first: boolean): Promise<Sent> {
@@ -141,6 +171,13 @@ async function sendNew(job: Job, chunk: Chunk, first: boolean): Promise<Sent> {
 	const { chatId, messageId } = job.task.input;
 	const signal = job.runtime.signal;
 	const replyTo = first ? { replyTo: messageId } : {};
+	if (chunk.rich !== undefined) {
+		const rich = chunk.rich;
+		return port.sendMessage(chatId, rich, { rich: true, ...replyTo }, signal).then(
+			(id): Sent => ({ kind: "sent", messageId: id }),
+			(error: unknown) => (isBadRequest(error) ? rejected(job, error) : Promise.reject(error)),
+		);
+	}
 	const id = await withPlainFallback(
 		() => port.sendMessage(chatId, chunk.html, { html: true, ...replyTo }, signal),
 		() => port.sendMessage(chatId, chunk.plain, replyTo, signal),

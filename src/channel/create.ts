@@ -33,6 +33,8 @@ export type TelegramChannelOptions = {
 	readonly stt?: Stt;
 	/** Bot API root; default https://api.telegram.org. */
 	readonly apiRoot?: string;
+	/** Answers as rich messages (buttons, tables) streamed as native drafts; default false: HTML messages. */
+	readonly rich?: boolean;
 	readonly log?: Logger;
 	readonly limits?: { readonly downloadBytes?: number; readonly uploadBytes?: number };
 	/** Used by /status for the context window and auth state. */
@@ -109,6 +111,7 @@ export function createTelegramChannel(options: TelegramChannelOptions): Telegram
 		log,
 		model: options.model,
 		onFatal,
+		rich: options.rich === true,
 		...(options.previewIntervalMs === undefined ? {} : { previewIntervalMs: options.previewIntervalMs }),
 		...(options.editRetryDelaysMs === undefined ? {} : { editRetryDelaysMs: options.editRetryDelaysMs }),
 	};

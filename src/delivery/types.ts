@@ -34,6 +34,8 @@ export type SendState = {
 	messageIds: number[];
 	/** Some chunk's outcome is unknown. */
 	unknown?: boolean;
+	/** Telegram rejected the rich message at this chunk: the rest of the answer goes out as HTML. */
+	htmlFrom?: number;
 };
 
 export type DeliverState = WaitState | SendState;
@@ -45,6 +47,8 @@ export type DeliveryDeps = {
 	readonly log: Logger;
 	readonly model: ModelRef;
 	readonly onFatal: FatalHandler;
+	/** Answers go out as rich messages and stream as native drafts. */
+	readonly rich?: boolean;
 	readonly previewIntervalMs?: number;
 	/** Pauses between final preview edits during a Telegram outage (default `EDIT_RETRY_DELAYS_MS`). */
 	readonly editRetryDelaysMs?: readonly number[];

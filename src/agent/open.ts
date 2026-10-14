@@ -65,6 +65,7 @@ export async function openAgent(config: Config, deps: OpenAgentDeps = {}): Promi
 		model: ref,
 		thinkingLevel: config.thinkingLevel,
 		apiRoot: config.telegramApiRoot,
+		rich: config.telegramRich === "auto",
 		log,
 		models,
 		...optional({
@@ -78,7 +79,9 @@ export async function openAgent(config: Config, deps: OpenAgentDeps = {}): Promi
 	});
 	const registry = createRegistry();
 	registry.install(createWorkspaceTools({ env: buildSafeEnv(deps.shellEnv ?? process.env) }));
-	registry.install(createPromptExtension({ instructionsPath: config.instructionsPath }));
+	registry.install(
+		createPromptExtension({ instructionsPath: config.instructionsPath, rich: config.telegramRich === "auto" }),
+	);
 	registry.install(createEmptyAnswerExtension());
 	registry.install(channel.extension);
 	const database = join(config.dataDir, DATABASE_FILE);
