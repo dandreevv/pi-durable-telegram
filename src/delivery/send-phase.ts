@@ -6,12 +6,13 @@ import {
 	type NextTaskState,
 	type RunningTask,
 	type TaskRuntime,
+	type Tx,
 	UserEntry,
 } from "@earendil-works/pi-durable";
-import { Delivered } from "../channel/docs.ts";
+import { Buttons, Delivered, rememberButtons } from "../channel/docs.ts";
 import { type Chunk, splitForTelegram } from "../format/chunk.ts";
 import { escapeHtml } from "../format/escape.ts";
-import { shortenButtonsData, splitRich, stripButtons } from "../format/rich.ts";
+import { hasCallbackButtons, shortenButtonsData, splitRich, stripButtons } from "../format/rich.ts";
 import { errorSummary } from "../runtime/log.ts";
 import { classifyTelegramError, isBadRequest, telegramErrorSummary } from "../telegram/errors.ts";
 import type { TelegramPort } from "../telegram/port.ts";
@@ -91,7 +92,7 @@ async function deliverChunk(job: Job, index: number, chunk: Chunk, state: SendSt
 	const preview = state.preview;
 	if (index === 0 && preview !== undefined) {
 		const edited = await editWithRetries(job, preview.messageId, chunk);
-		if (edited !== undefined) return record(job, state, index, edited);
+		if (edited !== undefined) return record(job, state, index, edited, chunk);
 	}
 	if (state.inFlight === index) {
 		job.deps.log.warn("delivery_unknown", { chat: job.task.input.chatId, chunk: index, reason: "restart during send" });
@@ -100,21 +101,30 @@ async function deliverChunk(job: Job, index: number, chunk: Chunk, state: SendSt
 	const marked: SendState = { ...state, inFlight: index };
 	await save(job, marked);
 	const sent = await withRateLimit(job, () => sendNew(job, chunk, index === 0));
-	return record(job, marked, index, sent);
+	return record(job, marked, index, sent, chunk);
 }
 
-async function record(job: Job, state: SendState, index: number, sent: Sent): Promise<SendState> {
+/** Commit the chunk's outcome; a sent rich chunk with callback buttons keeps its Markdown in the same commit. */
+async function record(job: Job, state: SendState, index: number, sent: Sent, chunk?: Chunk): Promise<SendState> {
 	const { inFlight: _cleared, ...rest } = state;
 	// A refused rich message sent nothing: the same chunk index is delivered again as HTML.
 	const next: SendState = sent.kind === "rejected" ? { ...rest, htmlFrom: index } : { ...rest, sent: index + 1 };
 	if (sent.kind === "sent") next.messageIds = [...state.messageIds, sent.messageId];
 	if (sent.kind === "unknown" || state.unknown === true) next.unknown = true;
-	await save(job, next);
+	const markdown = chunk?.rich;
+	if (sent.kind !== "sent" || markdown === undefined || !hasCallbackButtons(markdown)) await save(job, next);
+	else
+		await save(job, next, async (tx) =>
+			rememberButtons(await tx.doc(Buttons, job.runtime.conversationId), sent.messageId, markdown),
+		);
 	return next;
 }
 
-async function save(job: Job, state: SendState): Promise<void> {
-	await job.runtime.commit((): Next => ({ status: "running", checkpoint: state }), job.context);
+async function save(job: Job, state: SendState, write?: (tx: Tx) => Promise<void>): Promise<void> {
+	await job.runtime.commit(async (tx): Promise<Next> => {
+		await write?.(tx);
+		return { status: "running", checkpoint: state };
+	}, job.context);
 }
 
 /**

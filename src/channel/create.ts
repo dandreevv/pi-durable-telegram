@@ -215,7 +215,7 @@ class Lifecycle {
 			let started = false;
 			this.#polling = bot
 				.start({
-					allowed_updates: ["message"],
+					allowed_updates: ["message", "callback_query"],
 					onStart: (info) => {
 						started = true;
 						log.info("polling_started", { bot: info.username, allowed_users: rt.allowed.size });

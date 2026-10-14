@@ -7,8 +7,8 @@ import { TelegramApiError } from "../../src/telegram/errors.ts";
 import { CHAT, newFaux, startTestAgent, type TestAgent, tempDir } from "../helpers/agent.ts";
 import { waitFor } from "../helpers/env.ts";
 import { FakeTelegram } from "../helpers/fake-telegram.ts";
-import { words } from "../helpers/faux-steps.ts";
-import { textUpdate } from "../helpers/updates.ts";
+import { lastUserText, observe, words } from "../helpers/faux-steps.ts";
+import { callbackUpdate, textUpdate } from "../helpers/updates.ts";
 
 const RICH = { TELEGRAM_RICH: "auto" };
 const QUESTION = `| a | b |\n|---|---|\n| 1 | 2 |\n\nUpdate now?\n\n<tg-button-row><tg-button type="callback_data" data="Да, обновляй">Да</tg-button><tg-button type="callback_data" data="Нет">Нет</tg-button></tg-button-row>`;
@@ -118,4 +118,51 @@ test("T-rich-crash: closed while the draft streams, reopened: the run resumes an
 		port.drafts.every((draft) => draft.draftId === draftId),
 		"the resumed run keeps its draft id",
 	);
+});
+
+test("T-tap: a tap is answered, admitted once as the user's reply with its context, and marks the choice", async () => {
+	const faux = newFaux();
+	const seen: string[] = [];
+	faux.setResponses([
+		fauxAssistantMessage(QUESTION),
+		observe((messages) => void seen.push(lastUserText(messages)), fauxAssistantMessage("Updating.")),
+	]);
+	const { t, port } = await setup(faux);
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 20, "update?"));
+	const question = await waitFor(() => port.created(CHAT)[0], { what: "question" });
+	const tap = callbackUpdate(CHAT, question.id, "Да, обновляй", { queryId: "cq-1" });
+	await t.agent.channel.handleUpdate(tap);
+	await waitFor(() => port.textsIn(CHAT).includes("Updating."), { what: "answer to the tap" });
+	assert.deepEqual(port.answeredQueries, ["cq-1"]);
+	assert.equal(
+		seen[0],
+		"Да, обновляй\n\n(button under your message: «| a | b | |---|---| | 1 | 2 | Update now? [Да] [Нет]»)",
+	);
+	assert.equal(port.created(CHAT).find((m) => m.text === "Updating.")?.replyTo, question.id);
+	await waitFor(() => port.messages.get(question.id)?.text.includes("✅ Да"), { what: "choice marked" });
+	assert.match(port.messages.get(question.id)?.text ?? "", /<tg-button type="disabled">Нет<\/tg-button>/);
+	await t.agent.channel.handleUpdate(tap);
+	await waitFor(() => t.logs.filter((line) => line.includes("update_duplicate")).length === 1, { what: "duplicate" });
+	assert.equal(faux.state.callCount, 2, "the redelivered tap reached the model once");
+});
+
+test("T-tap-stranger: taps from strangers or another sender are ignored silently and never reach the model", async () => {
+	const faux = newFaux();
+	const { t, port } = await setup(faux);
+	await t.agent.channel.handleUpdate(callbackUpdate(222, 5, "Да"));
+	await t.agent.channel.handleUpdate(callbackUpdate(CHAT, 5, "Да", { fromId: 333 }));
+	assert.equal(port.calls.filter((call) => call.method !== "setMyCommands").length, 0, "no Telegram call at all");
+	assert.equal(faux.state.callCount, 0);
+	assert.equal(t.logs.filter((line) => line.includes("update_ignored")).length, 2);
+});
+
+test("T-tap-old: a button of a message the bridge no longer knows still becomes a message, unmarked", async () => {
+	const faux = newFaux();
+	const seen: string[] = [];
+	faux.setResponses([observe((messages) => void seen.push(lastUserText(messages)), fauxAssistantMessage("ok"))]);
+	const { t, port } = await setup(faux);
+	await t.agent.channel.handleUpdate(callbackUpdate(CHAT, 77, "Нет", { text: "Old question?" }));
+	await waitFor(() => port.textsIn(CHAT).includes("ok"), { what: "answer" });
+	assert.equal(seen[0], "Нет\n\n(button under your message: «Old question?»)");
+	assert.equal(port.count("editMessageText"), 0);
 });

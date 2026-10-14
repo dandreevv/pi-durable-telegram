@@ -26,12 +26,13 @@ import { messageKey } from "./docs.ts";
 import { admit, isKnown } from "./intake.ts";
 import { forwardMarker } from "./provenance.ts";
 import { type ChannelRuntime, type MessageScope, reply } from "./scope.ts";
+import { handleTap } from "./tap.ts";
 
 const MB = 1024 * 1024;
 
 /**
- * Handle one update: access gate, duplicate check, then a command, text, attachment or voice path that ends by
- * admitting a delivery task. Whatever an allowed user sends reaches the model: a file is saved and named, anything
+ * Handle one update: access gate, then a button tap, or a duplicate check and a command, text, attachment or voice
+ * path that ends by admitting a delivery task. Whatever an allowed user sends reaches the model: a file is saved and named, anything
  * else is described; the model decides what to do with it. Never awaits a model run; long commands run detached.
  * Never throws.
  */
@@ -50,6 +51,7 @@ async function route(rt: ChannelRuntime, update: Update): Promise<void> {
 		rt.log.info("update_ignored", access.fields);
 		return;
 	}
+	if (update.callback_query !== undefined) return handleTap(rt, update.callback_query);
 	const message = update.message as Message;
 	const scope = await scopeFor(rt, message);
 	if (await isKnown(rt.harness, scope.conversation, scope.key, BG)) {

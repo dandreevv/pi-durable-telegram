@@ -82,3 +82,35 @@ export function mediaUpdate(chatId: number, messageId: number, fields: Record<st
 		},
 	} as Update;
 }
+
+/** A tap on an inline button under message `messageId` of the bot. */
+export function callbackUpdate(
+	chatId: number,
+	messageId: number,
+	data: string,
+	options: { fromId?: number; queryId?: string; text?: string } = {},
+): Update {
+	return {
+		update_id: nextUpdateId++,
+		callback_query: {
+			id: options.queryId ?? `q${nextUpdateId}`,
+			from: { id: options.fromId ?? chatId, is_bot: false, first_name: "U" },
+			chat_instance: "ci",
+			data,
+			message: {
+				message_id: messageId,
+				date: DATE,
+				chat: { id: chatId, type: "private", first_name: "U" },
+				...(options.text === undefined ? {} : { text: options.text }),
+			},
+		},
+	} as Update;
+}
+
+/** The user pressed the stop button of draft `draftId`. */
+export function stoppedUpdate(chatId: number, draftId: number): Update {
+	return {
+		update_id: nextUpdateId++,
+		stopped_message_generation: { chat: { id: chatId, type: "private", first_name: "U" }, draft_id: draftId },
+	} as Update;
+}
