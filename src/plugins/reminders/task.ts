@@ -1,3 +1,5 @@
+import type { Context } from "@earendil-works/chord";
+import { withCancel } from "@earendil-works/chord/context";
 import { defineDoc, defineTask, type NextTaskState, type TaskRuntime, type Tx } from "@earendil-works/pi-durable";
 import { ChatInfo } from "../../channel/docs.ts";
 import { admitIn } from "../../channel/intake.ts";
@@ -64,6 +66,24 @@ async function fire(tx: Tx, runtime: Runtime, allowed: ReadonlySet<number>, id: 
 	return { status: "running", checkpoint: { phase: "wait", due: next } };
 }
 
+/** Sleep until `due`, or less: a cancel or another change of the entry wakes the task early, and `fire` ends it. */
+async function sleepUnlessChanged(runtime: Runtime, id: string, due: number, context: Context): Promise<void> {
+	const pending = (doc: { readonly items: Readonly<Record<string, Reminder>> } | null) =>
+		doc !== null && Object.hasOwn(doc.items, id) && doc.items[id]?.next === due;
+	const early = withCancel(context);
+	const watch = await runtime.watchDoc(Reminders, runtime.conversationId, context);
+	watch?.start(async (doc) => {
+		if (!pending(doc)) early.cancel();
+	});
+	try {
+		if (watch !== undefined && pending(watch.value)) await runtime.sleep(due, early.context);
+	} catch (error) {
+		if (context.abortSignal?.aborted === true || early.context.abortSignal?.aborted !== true) throw error;
+	} finally {
+		await watch?.stop();
+	}
+}
+
 /**
  * One background, conversation-owned task per reminder: it sleeps until the due time on the harness clock, and after a
  * restart sleeps again from its checkpoint (or fires at once, late). Registered by core whether or not the reminders
@@ -77,7 +97,7 @@ export function createReminderTask(allowed: ReadonlySet<number>) {
 		phases: {
 			wait: async (task, runtime, context) => {
 				const due = task.state.checkpoint.due;
-				await runtime.sleep(due, context);
+				await sleepUnlessChanged(runtime, task.input.id, due, context);
 				await runtime.commit((tx) => fire(tx, runtime, allowed, task.input.id, due), context);
 			},
 		},

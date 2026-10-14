@@ -311,3 +311,30 @@ test("T-remind-revoked: a reminder of a user taken off the allow-list is dropped
 	assert.deepEqual(port.textsIn(CHAT), ["Set."]);
 	assert.equal((await harness.commit((tx) => tx.scanTasks({ kind: "tg.deliver" }, 100), BG)).items.length, 1);
 });
+
+test("T-remind-cancel-ends: cancel ends the sleeping task at once, so add and cancel cannot pile up live tasks", async () => {
+	const { dir, port } = await room();
+	const results: Result[] = [];
+	const lastId = () => /Reminder (r\d+)/.exec(results.at(-1)?.text ?? "")?.[1] ?? "none";
+	const script: FauxResponseStep[] = [];
+	for (let i = 0; i < 3; i++)
+		script.push(toolCall("remind", { op: "add", text: `far ${i}`, at: "2027-10-01T09:00" }), () =>
+			toolCall("remind", { op: "cancel", id: lastId() }),
+		);
+	const faux = newFaux();
+	faux.setResponses(agentSteps([...script, fauxAssistantMessage("done")], results));
+	const t = await start(faux, { dir, port, now: () => T0 });
+	cleanups.push(() => t.close());
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 1, "add and cancel"));
+	await waitFor(() => port.textsIn(CHAT).includes("done"), { what: "done" });
+	assert.deepEqual(
+		results.map((r) => r.text.split(":")[0]?.split(" ")[0]),
+		["Reminder", "Cancelled", "Reminder", "Cancelled", "Reminder", "Cancelled"],
+	);
+	const harness = t.agent.harness;
+	await waitFor(async () => (await remindTasks(harness)).every((task) => task.state.status === "terminal"), {
+		what: "cancelled tasks ended",
+	});
+	assert.equal((await remindTasks(harness)).length, 3);
+	assert.equal(faux.state.callCount, 7, "no wake");
+});
