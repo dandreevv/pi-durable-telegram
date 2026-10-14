@@ -12,7 +12,7 @@ export function toolHint(name: string, args: JsonValue | undefined): string {
 
 function summarizeArgs(args: JsonValue | undefined): string | undefined {
 	if (args === null || typeof args !== "object" || Array.isArray(args)) return undefined;
-	for (const key of ["command", "path", "pattern", "url", "query"]) {
+	for (const key of ["command", "path", "pattern", "url", "query", "task", "text"]) {
 		const value = args[key];
 		if (typeof value === "string" && value.trim() !== "") return value.split("\n")[0];
 	}

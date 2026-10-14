@@ -34,6 +34,7 @@ const BUILTIN: Record<string, () => Promise<{ default: unknown }>> = {
 	search: () => import("./search.ts"),
 	mcp: () => import("./mcp.ts"),
 	skills: () => import("./skills.ts"),
+	helpers: () => import("./helpers.ts"),
 };
 const LOAD_MS = 60_000;
 const LATE = `did not finish loading in ${LOAD_MS / 1000} s`;
