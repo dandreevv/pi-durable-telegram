@@ -111,20 +111,28 @@ function hardCut(line: string, size: number): string[] {
 }
 
 /**
- * Callback data is 1-64 bytes: longer `data` is cut on a character (and entity) boundary; a cut that collides with
- * an earlier button's data in the same text gets a `#2`, `#3`… suffix. Deterministic, so a resend matches.
+ * Callback data is 1-64 bytes: empty `data` takes the label; longer `data` is cut on a character (and entity)
+ * boundary; a cut that collides with another button's data in the same text gets a `#2`, `#3`… suffix.
+ * Deterministic, so a resend matches.
  */
 export function shortenButtonsData(markdown: string): string {
-	const seen = new Set<string>();
-	return markdown.replace(BUTTON, (button: string) =>
+	const fitting = [...markdown.matchAll(BUTTON)].map((match) => DATA_ATTR.exec(match[1] ?? "")?.[2] ?? "");
+	const seen = new Set(fitting.filter((data) => data !== "" && Buffer.byteLength(data) <= DATA_MAX_BYTES));
+	return markdown.replace(BUTTON, (button: string, _attrs: string, label: string) =>
 		button.replace(DATA_ATTR, (_m, head: string, data: string, tail: string) => {
-			let short = cutBytes(data, DATA_MAX_BYTES);
-			for (let n = 2; short !== data && seen.has(short); n++)
-				short = `${cutBytes(data, DATA_MAX_BYTES - 1 - String(n).length)}#${n}`;
+			const full = data === "" ? labelData(label) : data;
+			let short = cutBytes(full, DATA_MAX_BYTES);
+			for (let n = 2; short !== full && seen.has(short); n++)
+				short = `${cutBytes(full, DATA_MAX_BYTES - 1 - String(n).length)}#${n}`;
 			seen.add(short);
 			return `${head}${short}${tail}`;
 		}),
 	);
+}
+
+function labelData(label: string): string {
+	const text = label.replace(/<[^>]*>/g, "").trim();
+	return text.replace(/"/g, "&quot;") || "?";
 }
 
 function cutBytes(text: string, max: number): string {

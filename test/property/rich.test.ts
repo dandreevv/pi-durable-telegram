@@ -38,6 +38,23 @@ test("P-button-data: long data that differ stay different after the cut", (t) =>
 	});
 });
 
+test("P-button-data: a cut never repeats another button's data, wherever the short one stands", (t) => {
+	const mixed = fc.oneof(
+		dataText,
+		dataText.map((d) => `${"a".repeat(64)}${d}`),
+		fc.constant("a".repeat(64)),
+	);
+	check(t, fc.uniqueArray(mixed, { minLength: 2, maxLength: 5 }), (datas) => {
+		const out = dataOf(shortenButtonsData(datas.map((d) => button(d)).join("\n")));
+		assert.equal(new Set(out).size, datas.length);
+		return true;
+	});
+});
+
+test("P-button-data: empty data takes the label, so no callback data is empty", () => {
+	assert.deepEqual(dataOf(shortenButtonsData(`${button("", "Да")}${button("", " ")}`)), ["Да", "?"]);
+});
+
 const line = fc.oneof(
 	fc.constantFrom(
 		"",
