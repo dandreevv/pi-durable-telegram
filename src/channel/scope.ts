@@ -41,13 +41,16 @@ export type MessageScope = {
 	readonly message: Message;
 	readonly chatId: number;
 	readonly messageId: number;
-	/** `tg:<chat>:<message>`. */
+	/** The Telegram update that carried the message. */
+	readonly updateId: number;
+	/** `tg:<chat>:<message>:<date>`. */
 	readonly key: string;
 };
 
 /** What a command needs; `messageId` is absent for a draft's stop button. */
 export type CommandScope = Pick<MessageScope, "rt" | "conversation" | "chatId" | "key"> & {
 	readonly messageId?: number;
+	readonly updateId?: number;
 };
 
 /** A direct reply to the message (or a plain message), sent at most once; failures are logged, never thrown. */

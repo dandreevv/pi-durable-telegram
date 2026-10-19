@@ -6,7 +6,7 @@ import { type FauxProviderHandle, fauxAssistantMessage } from "@earendil-works/p
 import { type Harness, SessionFailed } from "@earendil-works/pi-durable";
 import { NEW_REPLY } from "../../src/channel/commands/new.ts";
 import { ConversationDirectory } from "../../src/channel/conversations.ts";
-import { ChatMap } from "../../src/channel/docs.ts";
+import { ChatMap, Intake } from "../../src/channel/docs.ts";
 import { handleUpdate } from "../../src/channel/handlers.ts";
 import type { ChannelRuntime } from "../../src/channel/scope.ts";
 import { type Stt, SttError } from "../../src/media/stt.ts";
@@ -16,7 +16,7 @@ import { sleep, waitFor } from "../helpers/env.ts";
 import { FakeTelegram } from "../helpers/fake-telegram.ts";
 import { lastUserText, observe } from "../helpers/faux-steps.ts";
 import { pngBytes } from "../helpers/images.ts";
-import { documentUpdate, mediaUpdate, photoUpdate, textUpdate, voiceUpdate } from "../helpers/updates.ts";
+import { DATE, documentUpdate, mediaUpdate, photoUpdate, textUpdate, voiceUpdate } from "../helpers/updates.ts";
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -46,7 +46,49 @@ test("T-dup-update: a redelivered update is not submitted twice", async () => {
 	await sleep(200);
 	assert.equal(faux.state.callCount, 1);
 	assert.equal(await deliverTasks(t.agent.harness), 1);
-	assert.ok(t.logs.some((line) => line.includes("update_duplicate")));
+	assert.ok(t.logs.some((line) => line.startsWith("info update_duplicate") && line.includes("reason=redelivered")));
+});
+
+test("T-reset-numbering: after the bot changes, a new message with an old message id is answered", async () => {
+	const faux = newFaux();
+	faux.setResponses([fauxAssistantMessage("old bot"), fauxAssistantMessage("new bot")]);
+	const { t, port } = await setup(faux);
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 5, "hello", { date: DATE }));
+	await waitFor(() => port.textsIn(CHAT).includes("old bot"));
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 5, "hello again", { date: DATE + 86_400 }));
+	await waitFor(() => port.textsIn(CHAT).includes("new bot"));
+	assert.equal(faux.state.callCount, 2);
+	assert.equal(await deliverTasks(t.agent.harness), 2);
+	assert.ok(!t.logs.some((line) => line.includes("update_duplicate")));
+});
+
+test("T-legacy-keys: keys of an earlier version in the ring do not drop new messages", async () => {
+	const faux = newFaux();
+	faux.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("after upgrade")]);
+	const { t, port } = await setup(faux);
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 1, "hi"));
+	await waitFor(() => port.textsIn(CHAT).includes("first"));
+	const id = (await t.agent.harness.snapshot(ChatMap, BG))?.chats[String(CHAT)];
+	const conv = await t.agent.harness.conversation(id as never, BG);
+	assert.ok(conv !== undefined);
+	await conv.commit(async (tx) => {
+		(await tx.doc(Intake, conv.id)).keys.push(`tg:${CHAT}:9`);
+	}, BG);
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 9, "same id as an old key"));
+	await waitFor(() => port.textsIn(CHAT).includes("after upgrade"));
+	assert.equal(faux.state.callCount, 2);
+});
+
+test("T-dup-other-update: a known key under another update is dropped with a warning", async () => {
+	const faux = newFaux();
+	faux.setResponses([fauxAssistantMessage("once"), fauxAssistantMessage("twice")]);
+	const { t, port } = await setup(faux);
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 8, "hello"));
+	await waitFor(() => port.textsIn(CHAT).includes("once"));
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 8, "hello"));
+	await sleep(200);
+	assert.equal(faux.state.callCount, 1);
+	assert.ok(t.logs.some((line) => line.startsWith("warn update_duplicate") && line.includes("reason=other_update")));
 });
 
 test("T-dup-window: a duplicate racing the first copy is caught by the admit commit", async () => {
