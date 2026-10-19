@@ -1,13 +1,13 @@
 import type { Update } from "grammy/types";
 
 let nextUpdateId = 1;
-const DATE = 1_790_000_000;
+export const DATE = 1_790_000_000;
 
 export function textUpdate(
 	chatId: number,
 	messageId: number,
 	text: string,
-	options: { fromId?: number; chatType?: "private" | "group"; isBot?: boolean } = {},
+	options: { fromId?: number; chatType?: "private" | "group"; isBot?: boolean; date?: number } = {},
 ): Update {
 	const fromId = options.fromId ?? chatId;
 	const chat =
@@ -18,7 +18,7 @@ export function textUpdate(
 		update_id: nextUpdateId++,
 		message: {
 			message_id: messageId,
-			date: DATE,
+			date: options.date ?? DATE,
 			chat,
 			from: { id: fromId, is_bot: options.isBot ?? false, first_name: "U" },
 			text,

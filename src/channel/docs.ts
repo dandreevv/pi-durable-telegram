@@ -18,7 +18,11 @@ export const ChatInfo = defineDoc<{ chatId: number }>({
 	initial: () => ({ chatId: 0 }),
 });
 
-/** Ring of recently admitted Telegram message keys (`tg:<chat>:<message>`): redelivered updates are dropped. */
+/**
+ * Ring of recently admitted Telegram message keys (`tg:<chat>:<message>:<date>`) and update markers (`u:<update>`):
+ * redelivered updates are dropped. Keys of earlier versions (`tg:<chat>:<message>`) stay until they age out; no new
+ * key matches them.
+ */
 export const Intake = defineDoc<{ keys: string[] }>({
 	kind: "tg.intake",
 	version: 1,
@@ -70,9 +74,18 @@ export function rememberButtons(
 	while (doc.order.length > BUTTONS_RING_SIZE) delete doc.messages[String(doc.order.shift())];
 }
 
-/** `tg:<chatId>:<messageId>`: the intake key and the durable request id of the message's submission. */
-export function messageKey(chatId: number, messageId: number): string {
-	return `tg:${chatId}:${messageId}`;
+/**
+ * `tg:<chatId>:<messageId>:<date>`: the intake key and the durable request id of the message's submission. Message ids
+ * start again when the bot (its token) changes; the send date keeps a new message apart from an old one with the same
+ * id, and a redelivered update carries the same date.
+ */
+export function messageKey(chatId: number, messageId: number, date: number): string {
+	return `tg:${chatId}:${messageId}:${date}`;
+}
+
+/** `u:<updateId>`: kept next to a key, so a duplicate can be told apart as a redelivery of the same update. */
+export function updateMarker(updateId: number): string {
+	return `u:${updateId}`;
 }
 
 /** Add `key` to a ring, dropping the oldest beyond `size`; false when it was already present. */

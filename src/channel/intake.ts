@@ -2,25 +2,41 @@ import type { Context } from "@earendil-works/chord";
 import type { Conversation, ConversationId, Harness, Tx } from "@earendil-works/pi-durable";
 import type { DeliverTask } from "../delivery/task.ts";
 import type { DeliverInput } from "../delivery/types.ts";
-import { INTAKE_RING_SIZE, Intake, pushRing } from "./docs.ts";
+import { INTAKE_RING_SIZE, Intake, pushRing, updateMarker } from "./docs.ts";
 
-/** Read-only check before any download or transcription: was this message already admitted? */
-export async function isKnown(
+/**
+ * Why a message is a duplicate: `redelivered` when this very update was seen, `other_update` when only the key was
+ * (a message id that came back with the same date; Telegram never does this, so it is worth a warning).
+ */
+export type DuplicateReason = "redelivered" | "other_update";
+
+/** Read-only check before any download or transcription: was this message already admitted, and how is it known? */
+export async function knownAs(
 	harness: Harness,
 	conversation: Conversation,
 	key: string,
+	updateId: number | undefined,
 	context: Context,
-): Promise<boolean> {
-	const intake = await harness.snapshot(Intake, conversation.id, context);
-	return intake?.keys.includes(key) === true;
+): Promise<DuplicateReason | undefined> {
+	const keys = (await harness.snapshot(Intake, conversation.id, context))?.keys ?? [];
+	if (!keys.includes(key)) return undefined;
+	return updateId !== undefined && keys.includes(updateMarker(updateId)) ? "redelivered" : "other_update";
 }
 
-/** Record `key` in the intake ring; false when it was already there (a redelivered update). */
-export function recordKey(conversation: Conversation, key: string, context: Context): Promise<boolean> {
-	return conversation.commit(
-		async (tx) => pushRing((await tx.doc(Intake, conversation.id)).keys, key, INTAKE_RING_SIZE),
-		context,
-	);
+/** Record `key` (and the update's marker) in the intake ring; false when the key was already there. */
+export function recordKey(
+	conversation: Conversation,
+	key: string,
+	context: Context,
+	updateId?: number,
+): Promise<boolean> {
+	return conversation.commit(async (tx) => record(await tx.doc(Intake, conversation.id), key, updateId), context);
+}
+
+function record(intake: { keys: string[] }, key: string, updateId: number | undefined): boolean {
+	if (!pushRing(intake.keys, key, INTAKE_RING_SIZE)) return false;
+	if (updateId !== undefined) pushRing(intake.keys, updateMarker(updateId), INTAKE_RING_SIZE);
+	return true;
 }
 
 /**
@@ -32,9 +48,10 @@ export function admit(
 	deliver: DeliverTask,
 	input: DeliverInput,
 	context: Context,
+	updateId?: number,
 ): Promise<"admitted" | "duplicate"> {
 	return conversation.commit(
-		async (tx) => ((await admitIn(tx, conversation.id, deliver, input)) ? "admitted" : "duplicate"),
+		async (tx) => ((await admitIn(tx, conversation.id, deliver, input, updateId)) ? "admitted" : "duplicate"),
 		context,
 	);
 }
@@ -45,8 +62,9 @@ export async function admitIn(
 	conversationId: ConversationId,
 	deliver: DeliverTask,
 	input: DeliverInput,
+	updateId?: number,
 ): Promise<boolean> {
-	if (!pushRing((await tx.doc(Intake, conversationId)).keys, input.requestId, INTAKE_RING_SIZE)) return false;
+	if (!record(await tx.doc(Intake, conversationId), input.requestId, updateId)) return false;
 	const options = { ownership: { kind: "conversation" }, background: true, conversationId } as const;
 	await tx.createTask(deliver, input, options);
 	return true;

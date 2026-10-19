@@ -23,7 +23,7 @@ import { runHelp } from "./commands/start-help.ts";
 import { runStatus } from "./commands/status.ts";
 import { runStop } from "./commands/stop.ts";
 import { messageKey } from "./docs.ts";
-import { admit, isKnown } from "./intake.ts";
+import { admit, type DuplicateReason, knownAs } from "./intake.ts";
 import { forwardMarker } from "./provenance.ts";
 import { type ChannelRuntime, type MessageScope, reply } from "./scope.ts";
 import { handleTap } from "./tap.ts";
@@ -54,15 +54,13 @@ async function route(rt: ChannelRuntime, update: Update): Promise<void> {
 	if (update.callback_query !== undefined) return handleTap(rt, update.callback_query);
 	if (update.stopped_message_generation !== undefined) return stopFromDraft(rt, access.chatId, update.update_id);
 	const message = update.message as Message;
-	const scope = await scopeFor(rt, message);
-	if (await isKnown(rt.harness, scope.conversation, scope.key, BG)) {
-		rt.log.info("update_duplicate", { update_id: update.update_id, chat: scope.chatId, message: scope.messageId });
-		return;
-	}
+	const scope = await scopeFor(rt, message, update.update_id);
+	const reason = await knownAs(rt.harness, scope.conversation, scope.key, update.update_id, BG);
+	if (reason !== undefined) return logDuplicate(scope, reason);
 	await dispatch(scope);
 }
 
-async function scopeFor(rt: ChannelRuntime, message: Message): Promise<MessageScope> {
+async function scopeFor(rt: ChannelRuntime, message: Message, updateId: number): Promise<MessageScope> {
 	const chatId = message.chat.id;
 	const conversation = await rt.directory.get(chatId, BG);
 	return {
@@ -71,8 +69,16 @@ async function scopeFor(rt: ChannelRuntime, message: Message): Promise<MessageSc
 		message,
 		chatId,
 		messageId: message.message_id,
-		key: messageKey(chatId, message.message_id),
+		updateId,
+		key: messageKey(chatId, message.message_id, message.date),
 	};
+}
+
+/** A redelivery is routine; a known key under another update means a message was dropped that may be new. */
+function logDuplicate(scope: MessageScope, reason: DuplicateReason | "admitted_concurrently"): void {
+	const fields = { update_id: scope.updateId, chat: scope.chatId, message: scope.messageId, reason };
+	if (reason === "other_update") scope.rt.log.warn("update_duplicate", fields);
+	else scope.rt.log.info("update_duplicate", fields);
 }
 
 async function dispatch(scope: MessageScope): Promise<void> {
@@ -119,7 +125,7 @@ async function runCommand(scope: MessageScope, name: string, args: string): Prom
 /** The stop button of a draft does what /stop does; the update id keeps a redelivered stop from running twice. */
 async function stopFromDraft(rt: ChannelRuntime, chatId: number, updateId: number): Promise<void> {
 	const conversation = await rt.directory.get(chatId, BG);
-	const scope = { rt, conversation, chatId, key: `tg:${chatId}:stop:${updateId}` };
+	const scope = { rt, conversation, chatId, updateId, key: `tg:${chatId}:stop:${updateId}` };
 	detach(scope, "stop", () => runStop(scope));
 }
 
@@ -138,11 +144,9 @@ async function admitContent(scope: MessageScope, text: string): Promise<boolean>
 	const marker = forwardMarker(scope.message);
 	const content = marker === undefined ? text : `${marker}\n${text}`;
 	const input = { chatId: scope.chatId, messageId: scope.messageId, requestId: scope.key, content };
-	const result = await admit(scope.conversation, scope.rt.deliver, input, BG);
-	scope.rt.log.info(result === "admitted" ? "message_admitted" : "update_duplicate", {
-		chat: scope.chatId,
-		message: scope.messageId,
-	});
+	const result = await admit(scope.conversation, scope.rt.deliver, input, BG, scope.updateId);
+	if (result === "admitted") scope.rt.log.info("message_admitted", { chat: scope.chatId, message: scope.messageId });
+	else logDuplicate(scope, "admitted_concurrently");
 	return result === "admitted";
 }
 
