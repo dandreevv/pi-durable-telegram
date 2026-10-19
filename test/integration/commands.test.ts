@@ -10,7 +10,7 @@ import { CHAT, newFaux, startTestAgent, type TestAgent, tempDir } from "../helpe
 import { sleep, waitFor } from "../helpers/env.ts";
 import { FakeTelegram } from "../helpers/fake-telegram.ts";
 import { toolCall, untilAborted } from "../helpers/faux-steps.ts";
-import { textUpdate } from "../helpers/updates.ts";
+import { DATE, textUpdate } from "../helpers/updates.ts";
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -87,6 +87,50 @@ test("/new starts a fresh context in the same conversation; history stays in sto
 	assert.equal((await conversation(t)).id, before.id);
 	const history = await before.entries({}, 50, undefined, BG);
 	assert.ok(history.items.some((entry) => JSON.stringify(entry.model ?? []).includes("remember 42")));
+});
+
+test("T-new-names-dropped: /new tells which unanswered messages it dropped", async () => {
+	const faux = newFaux();
+	faux.setResponses([untilAborted, fauxAssistantMessage("fresh")]);
+	const { t, port } = await setup(faux);
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 1, "long job"));
+	const conv = await conversation(t);
+	await waitFor(async () => (await t.agent.harness.snapshot(LiveDoc, conv.id, BG))?.run, { what: "run" });
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 2, "please also check the invoice from Monday morning"));
+	await waitFor(async () => ((await t.agent.harness.snapshot(InboxDoc, conv.id, BG))?.items.length ?? 0) === 1, {
+		what: "queued",
+	});
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 3, "/new"));
+	await waitFor(() => replyTo(port, 3) !== undefined, { what: "/new reply" });
+	assert.equal(
+		replyTo(port, 3),
+		"New context. Old history is kept.\nThe request in progress was stopped.\n" +
+			"Dropped without an answer (1): «please also check the invoice from Mond…». Send again what still matters.",
+	);
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 4, "hi"));
+	await waitFor(() => replyTo(port, 4) === "fresh", { what: "answer in the new context" });
+	assert.equal(replyTo(port, 2), undefined, "the dropped message gets no answer of its own");
+});
+
+test("T-commands-reset: after the bot changes, commands with old message ids run; a redelivered one runs once", async () => {
+	const faux = newFaux();
+	const { t, port } = await setup(faux);
+	const later = DATE + 86_400;
+	const status = textUpdate(CHAT, 1, "/status", { date: DATE });
+	await t.agent.channel.handleUpdate(status);
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 2, "/stop", { date: DATE }));
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 3, "/new", { date: DATE }));
+	await waitFor(() => port.created(CHAT).length === 3, { what: "first replies" });
+	await t.agent.channel.handleUpdate(status);
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 1, "/status", { date: later }));
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 2, "/stop", { date: later }));
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 3, "/new", { date: later }));
+	await waitFor(() => port.created(CHAT).length === 6, { what: "replies after the reset" });
+	await sleep(200);
+	const replies = port.created(CHAT).map((m) => `${m.replyTo}:${m.text.split("\n")[0]}`);
+	assert.equal(replies.filter((r) => r.startsWith("1:")).length, 2, "the redelivered /status ran once");
+	assert.equal(replies.filter((r) => r === "2:Nothing is running.").length, 2);
+	assert.equal(replies.filter((r) => r === "3:New context. Old history is kept.").length, 2);
 });
 
 test("T-stop-keeps-queue: /stop aborts the current run; the queued message is still answered", async () => {

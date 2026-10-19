@@ -29,7 +29,7 @@ async function authLabel(scope: MessageScope, provider: string): Promise<string>
 
 /** /status: model, thinking, auth, busy state, queue, context use and spend. */
 export async function runStatus(scope: MessageScope): Promise<void> {
-	if (!(await recordKey(scope.conversation, scope.key, BG))) return;
+	if (!(await recordKey(scope.conversation, scope.key, BG, scope.updateId))) return;
 	const { harness, models } = scope.rt;
 	const id = scope.conversation.id;
 	const agent = await scope.conversation.agent(BG);

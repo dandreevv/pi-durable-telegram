@@ -8,7 +8,7 @@ import { type CommandScope, reply } from "../scope.ts";
  * messages stay; then a passive write gives the conversation a boundary to place them.
  */
 export async function runStop(scope: CommandScope): Promise<void> {
-	if (!(await recordKey(scope.conversation, scope.key, BG))) return;
+	if (!(await recordKey(scope.conversation, scope.key, BG, scope.updateId))) return;
 	const { harness } = scope.rt;
 	const id = scope.conversation.id;
 	const live = async () => (await harness.snapshot(LiveDoc, id, BG))?.run;
