@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.6 (2026-10-19)
+
+- Fix: after the bot (its token) changed, new messages were dropped as duplicates: Telegram starts message ids again,
+  and the intake ring still held the old ids. The intake key is now `tg:<chat>:<message>:<date>`; a redelivered update
+  keeps its date and is still dropped once. Keys written by earlier versions stay in the ring and match no new key.
+- `update_duplicate` logs its reason: `redelivered` (info) when the same update was seen, `other_update` (warn) when
+  only the message key was known, which means a message may have been lost.
+- `/new` no longer drops queued messages silently: its reply says that the running request was stopped and lists the
+  first words of each message dropped without an answer.
+
 ## 0.1.5 (2026-10-14)
 
 - `helpers`: the `helper` tool hands a self-contained task to a helper agent with the same tools (without `helper`
