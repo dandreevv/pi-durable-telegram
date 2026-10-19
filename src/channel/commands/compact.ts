@@ -8,7 +8,7 @@ import { type MessageScope, reply } from "../scope.ts";
  */
 export async function runCompact(scope: MessageScope, instructions: string): Promise<void> {
 	const { conversation, rt } = scope;
-	if (!(await recordKey(conversation, scope.key, BG))) return;
+	if (!(await recordKey(conversation, scope.key, BG, scope.updateId))) return;
 	const compactionTaskId = await conversation.compact(instructions === "" ? undefined : instructions, BG);
 	await conversation.commit(async (tx) => {
 		const input = { chatId: scope.chatId, replyTo: scope.messageId, compactionTaskId };

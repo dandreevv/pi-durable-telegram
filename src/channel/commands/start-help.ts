@@ -17,6 +17,6 @@ export function helpText(voice: boolean): string {
 
 /** /start and /help: record the key, then reply once. */
 export async function runHelp(scope: MessageScope): Promise<void> {
-	if (!(await recordKey(scope.conversation, scope.key, BG))) return;
+	if (!(await recordKey(scope.conversation, scope.key, BG, scope.updateId))) return;
 	await reply(scope, helpText(scope.rt.stt !== undefined));
 }
