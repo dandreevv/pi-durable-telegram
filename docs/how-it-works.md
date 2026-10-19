@@ -35,7 +35,8 @@ edited about once per second) and is then sent as a rich message.
   ✅ and the message's other choices are disabled. There is no waiting state: typing instead of tapping is just a
   message, and buttons keep working after a restart (old ones may just stay unmarked).
 - **Queueing.** Messages sent while the agent works are queued and answered in order. Nothing is dropped.
-- **Commands.** `/new`, `/stop`, `/compact`, `/status`, `/help`.
+- **Commands.** `/new`, `/stop`, `/compact`, `/status`, `/help`. `/new` drops what was still waiting for an answer
+  and says so: its reply names the stopped run and the first words of each dropped message.
 - **Anything you send reaches the agent.** Photos, documents, videos, animations and stickers (up to 20 MB, the Bot
   API limit) are saved to `<workdir>/inbox/YYYY-MM-DD/`; the agent gets the path and decides what to do with the
   file (it can look at images with `read`). A file that is too big or fails to download is still reported to the
@@ -62,7 +63,8 @@ adds the Telegram side of the same promise:
 | The process is killed while the model is answering | On start, `resume()` continues the run; the answer reaches the chat once |
 | Killed while a shell command runs | The model is told the tool was interrupted and decides what to do next |
 | Killed after the answer is stored but before Telegram got it | Delivery resumes from its stored progress; a first message cut off mid-send is sent again (rarely twice), later parts never twice |
-| Telegram redelivers an update | The update id is already known; it is not submitted twice |
+| Telegram redelivers an update | The message (chat, message id and send date) is already known; it is not submitted twice |
+| The bot token changes and message ids start again | The send date tells a new message from an old one with the same id; nothing is dropped |
 | Killed while the answer streams as a draft | The draft disappears; the run resumes and the final answer is sent once |
 | You write while the agent is busy | The message is queued durably and answered after the current run |
 | Telegram is unreachable for a while | Edits and sends retry with backoff, honouring `retry_after` |

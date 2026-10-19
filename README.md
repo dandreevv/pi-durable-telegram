@@ -68,7 +68,7 @@ More in [docs/install.md](docs/install.md).
 | Send this | And the agent will |
 |---|---|
 | anything: text, a photo, a video, a file, a voice note, a location | work on it and answer |
-| `/new` | start a fresh conversation (the old one is kept) |
+| `/new` | start a fresh conversation (the old one is kept); it names any messages it dropped unanswered |
 | `/stop` | stop what it is doing right now |
 | `/compact` | shorten a long conversation to its essentials |
 | `/status` | show the AI model in use, how full the memory is and what it has cost |
