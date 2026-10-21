@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7 (2026-10-21)
+
+- Fixed: a tap disables only its own button row, other questions in the same message stay answerable. A button
+  outside any `<tg-button-row>` still disables every choice of the message.
+
 ## 0.1.6 (2026-10-19)
 
 - Fix: after the bot (its token) changed, new messages were dropped as duplicates: Telegram starts message ids again,
