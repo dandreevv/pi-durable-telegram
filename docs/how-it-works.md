@@ -32,7 +32,8 @@ edited about once per second) and is then sent as a rich message.
   64 bytes is cut on a character boundary (with `#2`, `#3` when two cuts collide). A tap from an allowed user is
   answered at once and becomes the user's next message: the button's data plus a line naming the message it was
   under. It is admitted once per tap, so a redelivered tap is not submitted twice. The pressed button is then marked
-  ✅ and the message's other choices are disabled. There is no waiting state: typing instead of tapping is just a
+  ✅ and the other choices of its `<tg-button-row>` are disabled; other rows of the message stay answerable (a button
+  outside any row disables all of the message's choices). There is no waiting state: typing instead of tapping is just a
   message, and buttons keep working after a restart (old ones may just stay unmarked).
 - **Queueing.** Messages sent while the agent works are queued and answered in order. Nothing is dropped.
 - **Commands.** `/new`, `/stop`, `/compact`, `/status`, `/help`. `/new` drops what was still waiting for an answer
