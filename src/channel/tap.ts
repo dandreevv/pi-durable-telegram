@@ -35,7 +35,7 @@ export async function handleTap(rt: ChannelRuntime, query: CallbackQuery): Promi
 		rt.track(markChoice(rt, conversation, { chatId, messageId, sent, data: query.data }));
 }
 
-/** Disable the message's callback buttons and mark the tapped one; failures are logged, never thrown. */
+/** Mark the tapped button and disable the other choices of its row; failures are logged, never thrown. */
 async function markChoice(rt: ChannelRuntime, conversation: Conversation, tap: Tap): Promise<void> {
 	const marked = markChosen(tap.sent, tap.data);
 	if (marked === undefined) return;

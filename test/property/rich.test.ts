@@ -125,6 +125,55 @@ test("buttons: chosen marking, labels for the HTML fallback, draft frames", () =
 	assert.equal(markChosen(marked, "Да, обновляй"), undefined, "nothing left to choose");
 	assert.equal(markChosen(markdown, "something else"), undefined);
 	assert.equal(stripButtons(markdown), "Update now?\n\n[Да] [Нет] [Docs]");
+	const loose = `Pick\n\n${button("a")}${button("b")}\n\nAnd\n\n${button("c")}`;
+	assert.equal(
+		markChosen(loose, "c"),
+		`Pick\n\n<tg-button type="disabled">L</tg-button><tg-button type="disabled">L</tg-button>\n\nAnd\n\n<tg-button type="disabled" style="success">✅ L</tg-button>`,
+		"a button outside any row disables every callback button",
+	);
 	assert.equal(draftMarkdown(""), "<tg-thinking>Thinking…</tg-thinking>");
 	assert.equal(draftMarkdown("Partial <tg-butt"), "Partial");
+});
+
+test("buttons: a tap disables only its own row; a later tap in another row of the edited message works too", () => {
+	const first = `<tg-button-row>${button("Да, обновляй", "Да")}${button("Нет", "Нет")}</tg-button-row>`;
+	const second = `<tg-button-row>${button("Утром", "Утром")}${button("Вечером", "Вечером")}</tg-button-row>`;
+	const markdown = `Update now?\n\n${first}\n\nWhen?\n\n${second}`;
+	const afterSecond = markChosen(markdown, "Вечером") ?? "";
+	assert.ok(afterSecond.startsWith(`Update now?\n\n${first}\n\nWhen?`), "the first row stays as it was");
+	assert.match(afterSecond, /<tg-button type="disabled">Утром<\/tg-button>/);
+	assert.match(afterSecond, /<tg-button type="disabled" style="success">✅ Вечером<\/tg-button>/);
+	const afterBoth = markChosen(afterSecond, "Нет") ?? "";
+	assert.match(afterBoth, /<tg-button type="disabled">Да<\/tg-button>/);
+	assert.match(afterBoth, /✅ Нет/);
+	assert.match(afterBoth, /✅ Вечером/, "the second row keeps its choice");
+	assert.doesNotMatch(afterBoth, /callback_data/, "both questions are answered");
+	assert.equal(markChosen(afterBoth, "Утром"), undefined, "a disabled row is not chosen again");
+	assert.equal(markChosen(markdown, "Позже"), undefined, "a miss");
+	const twice = `${first}\n\n${first}`;
+	assert.equal(markChosen(twice, "Нет"), `${markChosen(first, "Нет")}\n\n${first}`, "same data in two rows: the first");
+});
+
+test("P-row-tap: a tap rewrites only the row it is in, every other row stays byte for byte", (t) => {
+	const rows = fc.array(fc.uniqueArray(fc.constantFrom("a", "b", "c", "d"), { minLength: 1, maxLength: 4 }), {
+		minLength: 1,
+		maxLength: 4,
+	});
+	check(t, fc.tuple(rows, fc.nat()), ([datas, pick]) => {
+		const blocks = datas.map(
+			(row, i) => `<tg-button-row>${row.map((d) => button(`${i}${d}`)).join("")}</tg-button-row>`,
+		);
+		const markdown = blocks.join("\n\nNext?\n\n");
+		const target = pick % datas.length;
+		const data = `${target}${datas[target]?.[0]}`;
+		const marked = markChosen(markdown, data);
+		if (marked === undefined) return false;
+		const out = marked.split("\n\nNext?\n\n");
+		return (
+			out.length === blocks.length &&
+			out.every((block, i) =>
+				i === target ? block.includes("✅") && !block.includes("callback_data") : block === blocks[i],
+			)
+		);
+	});
 });

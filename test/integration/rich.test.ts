@@ -175,6 +175,25 @@ test("T-tap: a tap is answered, admitted once as the user's reply with its conte
 	assert.equal(faux.state.callCount, 2, "the redelivered tap reached the model once");
 });
 
+test("T-tap-rows: two taps in one message mark their own rows; the first choice survives the second", async () => {
+	const twoRows = `${QUESTION}\n\nWhen?\n\n<tg-button-row><tg-button type="callback_data" data="Утром">Утром</tg-button><tg-button type="callback_data" data="Вечером">Вечером</tg-button></tg-button-row>`;
+	const faux = newFaux();
+	faux.setResponses([fauxAssistantMessage(twoRows), fauxAssistantMessage("Later."), fauxAssistantMessage("Updating.")]);
+	const { t, port } = await setup(faux);
+	await t.agent.channel.handleUpdate(textUpdate(CHAT, 20, "update?"));
+	const question = await waitFor(() => port.created(CHAT)[0], { what: "question" });
+	const text = () => port.messages.get(question.id)?.text ?? "";
+	await t.agent.channel.handleUpdate(callbackUpdate(CHAT, question.id, "Вечером"));
+	await waitFor(() => text().includes("✅ Вечером"), { what: "second row marked" });
+	assert.match(text(), /type="callback_data" data="Да, обновляй"/, "the first question is still answerable");
+	await t.agent.channel.handleUpdate(callbackUpdate(CHAT, question.id, "Да, обновляй"));
+	await waitFor(() => text().includes("✅ Да"), { what: "first row marked" });
+	assert.match(text(), /✅ Вечером/, "the second row keeps its choice");
+	assert.doesNotMatch(text(), /callback_data/);
+	await waitFor(() => port.textsIn(CHAT).includes("Updating."), { what: "both taps answered" });
+	assert.equal(faux.state.callCount, 3);
+});
+
 test("T-tap-stranger: taps from strangers or another sender are ignored silently and never reach the model", async () => {
 	const faux = newFaux();
 	const { t, port } = await setup(faux);

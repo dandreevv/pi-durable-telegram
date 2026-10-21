@@ -10,6 +10,7 @@ const BLOCK_TAG = /<(\/?)(details|tg-button-row|tg-collage|tg-slideshow)\b/gi;
 const BUTTON = /<tg-button(?=[\s>])([^>]*)>([\s\S]*?)<\/tg-button>/gi;
 const DATA_ATTR = /(\sdata=")([^"]*)(")/i;
 const CALLBACK = /\stype="callback_data"/i;
+const ROW = /<tg-button-row\b[^>]*>[\s\S]*?<\/tg-button-row>/gi;
 
 type Unit = { lines: string[]; chars: number; blocks: number };
 
@@ -157,12 +158,28 @@ export function hasCallbackButtons(markdown: string): boolean {
 }
 
 /**
- * The text with every callback button disabled and the first one whose data is `data` shown as chosen; undefined
- * when no callback button carries that data.
+ * The text with the first callback button whose data is `data` shown as chosen and its choices disabled; undefined
+ * when no callback button carries that data. A button inside a `<tg-button-row>` disables only its own row, so the
+ * other questions of the message stay answerable; a button outside any row disables every callback button. When two
+ * rows carry the same data, the first one is chosen.
  */
 export function markChosen(markdown: string, data: string): string | undefined {
+	const tapped = [...markdown.matchAll(BUTTON)].find(
+		(match) => CALLBACK.test(match[1] ?? "") && decodeEntities(DATA_ATTR.exec(match[1] ?? "")?.[2] ?? "") === data,
+	);
+	if (tapped === undefined) return undefined;
+	const row = [...markdown.matchAll(ROW)].find(
+		(match) => match.index <= tapped.index && tapped.index < match.index + match[0].length,
+	);
+	if (row === undefined) return disableChoices(markdown, data);
+	const end = row.index + row[0].length;
+	return markdown.slice(0, row.index) + disableChoices(row[0], data) + markdown.slice(end);
+}
+
+/** Every callback button of `text` disabled, the first one whose data is `data` marked ✅. */
+function disableChoices(text: string, data: string): string {
 	let chosen = false;
-	const marked = markdown.replace(BUTTON, (button: string, attrs: string, label: string) => {
+	return text.replace(BUTTON, (button: string, attrs: string, label: string) => {
 		if (!CALLBACK.test(attrs)) return button;
 		const hit = !chosen && decodeEntities(DATA_ATTR.exec(attrs)?.[2] ?? "") === data;
 		chosen ||= hit;
@@ -170,7 +187,6 @@ export function markChosen(markdown: string, data: string): string | undefined {
 		const style = hit ? ` style="success"` : "";
 		return `<tg-button type="disabled"${hit ? kept.replace(/\sstyle="[^"]*"/i, "") : kept}${style}>${hit ? `✅ ${label}` : label}</tg-button>`;
 	});
-	return chosen ? marked : undefined;
 }
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", "#39": "'" };
