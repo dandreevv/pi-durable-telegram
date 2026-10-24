@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.8 (2026-10-24)
 
 - Replies carry the original message text or media caption as context; selected Telegram quotes take priority.
 
