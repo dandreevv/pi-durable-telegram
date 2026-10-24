@@ -3,6 +3,7 @@ import { BACKGROUND_CONTEXT as BG } from "@earendil-works/chord/context";
 import type { Message, Update } from "grammy/types";
 import { probeImage } from "../agent/tools/image-probe.ts";
 import { truncate } from "../format/escape.ts";
+import { contextLine } from "../format/rich.ts";
 import {
 	type Attachment,
 	attachmentNote,
@@ -22,7 +23,7 @@ import { runNew } from "./commands/new.ts";
 import { runHelp } from "./commands/start-help.ts";
 import { runStatus } from "./commands/status.ts";
 import { runStop } from "./commands/stop.ts";
-import { messageKey } from "./docs.ts";
+import { Buttons, messageKey } from "./docs.ts";
 import { admit, type DuplicateReason, knownAs } from "./intake.ts";
 import { forwardMarker } from "./provenance.ts";
 import { type ChannelRuntime, type MessageScope, reply } from "./scope.ts";
@@ -142,12 +143,31 @@ function detach(scope: Pick<MessageScope, "rt">, name: string, work: () => Promi
 /** Admit the message for a model run; true when this call admitted it (false: a duplicate). */
 async function admitContent(scope: MessageScope, text: string): Promise<boolean> {
 	const marker = forwardMarker(scope.message);
-	const content = marker === undefined ? text : `${marker}\n${text}`;
+	const content = (marker === undefined ? text : `${marker}\n${text}`) + (await replyContext(scope));
 	const input = { chatId: scope.chatId, messageId: scope.messageId, requestId: scope.key, content };
 	const result = await admit(scope.conversation, scope.rt.deliver, input, BG, scope.updateId);
 	if (result === "admitted") scope.rt.log.info("message_admitted", { chat: scope.chatId, message: scope.messageId });
 	else logDuplicate(scope, "admitted_concurrently");
 	return result === "admitted";
+}
+
+/** A reply carries the selected quote, or the original message using the same snapshot and limit as a tap. */
+async function replyContext(scope: MessageScope): Promise<string> {
+	const original = scope.message.reply_to_message;
+	if (original === undefined) return "";
+	const quote = scope.message.quote;
+	if (quote !== undefined) return `\n\n(reply quoting: «${contextLine(quote.text, 1500)}»)`;
+	const sent = original.from?.is_bot
+		? (await scope.rt.harness.snapshot(Buttons, scope.conversation.id, BG))?.messages[String(original.message_id)]
+		: undefined;
+	const context = contextLine(sent ?? original.text ?? original.caption ?? "", 1500);
+	if (context === "") return "";
+	const name = contextLine(
+		original.from === undefined ? "unknown" : `${original.from.first_name} ${original.from.last_name ?? ""}`,
+		64,
+	);
+	const source = original.from?.is_bot ? "your message" : `message from ${name}`;
+	return `\n\n(reply to ${source}: «${context}»)`;
 }
 
 /** Save the file and tell the model where it is; a file that cannot be fetched is still reported to the model. */

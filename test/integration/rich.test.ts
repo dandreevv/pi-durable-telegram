@@ -8,7 +8,7 @@ import { CHAT, newFaux, startTestAgent, type TestAgent, tempDir } from "../helpe
 import { sleep, waitFor } from "../helpers/env.ts";
 import { blockUntilAborted, FakeTelegram } from "../helpers/fake-telegram.ts";
 import { lastUserText, observe, untilAborted, words } from "../helpers/faux-steps.ts";
-import { callbackUpdate, stoppedUpdate, textUpdate } from "../helpers/updates.ts";
+import { callbackUpdate, mediaUpdate, stoppedUpdate, textUpdate } from "../helpers/updates.ts";
 
 const RICH = { TELEGRAM_RICH: "auto" };
 const QUESTION = `| a | b |\n|---|---|\n| 1 | 2 |\n\nUpdate now?\n\n<tg-button-row><tg-button type="callback_data" data="Да, обновляй">Да</tg-button><tg-button type="callback_data" data="Нет">Нет</tg-button></tg-button-row>`;
@@ -214,6 +214,124 @@ test("T-tap-old: a button of a message the bridge no longer knows still becomes 
 	assert.equal(seen[0], "Нет\n\n(button under your message: «Old question?»)");
 	assert.equal(port.count("editMessageText"), 0);
 });
+
+for (const quote of [false, true]) {
+	test(`T-reply-snapshot: ${quote ? "a selected quote takes priority" : "the saved bot text takes priority over Telegram text"}`, async () => {
+		const faux = newFaux();
+		let seen = "";
+		faux.setResponses([
+			fauxAssistantMessage(QUESTION),
+			observe((messages) => {
+				seen = lastUserText(messages);
+			}, fauxAssistantMessage("Reply received.")),
+		]);
+		const { t, port } = await setup(faux);
+		await t.agent.channel.handleUpdate(textUpdate(CHAT, 40, "question?"));
+		await delivered(t);
+		const question = port.created(CHAT)[0];
+		assert.ok(question);
+		await t.agent.channel.handleUpdate(
+			mediaUpdate(CHAT, 41, {
+				text: "yes",
+				reply_to_message: {
+					...textUpdate(CHAT, question.id, "Telegram shortened text", { isBot: true }).message,
+				},
+				...(quote ? { quote: { text: "Update\nnow?", position: 0 } } : {}),
+			}),
+		);
+		await waitFor(() => port.textsIn(CHAT).includes("Reply received."));
+		assert.equal(
+			seen,
+			quote
+				? "yes\n\n(reply quoting: «Update now?»)"
+				: "yes\n\n(reply to your message: «| a | b | |---|---| | 1 | 2 | Update now? [Да] [Нет]»)",
+		);
+	});
+}
+
+const oldBotMessage = textUpdate(CHAT, 77, "Old\nquestion?", { isBot: true }).message;
+for (const scenario of [
+	{
+		name: "bot text without a saved snapshot",
+		fields: { text: "yes", reply_to_message: oldBotMessage },
+		expected: "yes\n\n(reply to your message: «Old question?»)",
+	},
+	{
+		name: "a media caption",
+		fields: {
+			text: "yes",
+			reply_to_message: {
+				...mediaUpdate(CHAT, 78, { photo: [], caption: "Photo\ncaption" }).message,
+				from: { id: 999, is_bot: true, first_name: "Bot" },
+			},
+		},
+		expected: "yes\n\n(reply to your message: «Photo caption»)",
+	},
+	{
+		name: "the user's own message",
+		fields: { text: "yes", reply_to_message: textUpdate(CHAT, 78, "My idea").message },
+		expected: "yes\n\n(reply to message from U: «My idea»)",
+	},
+	{
+		name: "another sender's message",
+		fields: {
+			text: "yes",
+			reply_to_message: {
+				...textUpdate(CHAT, 78, "An idea").message,
+				from: { id: 123, is_bot: false, first_name: "Ada", last_name: "Lovelace" },
+			},
+		},
+		expected: "yes\n\n(reply to message from Ada Lovelace: «An idea»)",
+	},
+	{ name: "plain text without a reply", fields: { text: "yes" }, expected: "yes" },
+	{
+		name: "a long reply context",
+		fields: { text: "yes", reply_to_message: { ...oldBotMessage, text: "x".repeat(2000) } },
+		expected: `yes\n\n(reply to your message: «${"x".repeat(1499)}…»)`,
+	},
+	{
+		name: "an incoming file with a caption",
+		fields: {
+			document: { file_id: "file", file_unique_id: "f", file_name: "note.txt", file_size: 1 },
+			caption: "attached",
+			reply_to_message: oldBotMessage,
+		},
+		expected: /\[attachment\] document saved to .*\nCaption: attached\n\n\(reply to your message: «Old question\?»\)$/,
+	},
+	{
+		name: "an incoming voice saved without a transcript",
+		fields: {
+			voice: { file_id: "file", file_unique_id: "v", duration: 1, file_size: 1 },
+			reply_to_message: oldBotMessage,
+		},
+		expected: /\[attachment\] voice saved to .*\nNo transcript: .*\n\n\(reply to your message: «Old question\?»\)$/,
+	},
+	{
+		name: "a location with a selected quote",
+		fields: {
+			location: { latitude: 41.3, longitude: 69.2 },
+			reply_to_message: oldBotMessage,
+			quote: { text: "question?", position: 4 },
+		},
+		expected: '[telegram location] {"location":{"latitude":41.3,"longitude":69.2}}\n\n(reply quoting: «question?»)',
+	},
+]) {
+	test(`T-reply: ${scenario.name}`, async () => {
+		const faux = newFaux();
+		let seen = "";
+		faux.setResponses([
+			observe((messages) => {
+				seen = lastUserText(messages);
+			}, fauxAssistantMessage("Reply received.")),
+		]);
+		const { t, port } = await setup(faux);
+		port.files.set("file", new Uint8Array([1]));
+		await t.agent.channel.handleUpdate(mediaUpdate(CHAT, 42, scenario.fields));
+		await waitFor(() => port.textsIn(CHAT).includes("Reply received."));
+		if (scenario.expected instanceof RegExp) assert.match(seen, scenario.expected);
+		else assert.equal(seen, scenario.expected);
+	});
+}
 
 test("T-draft-stop: the draft's stop button stops the run like /stop; a redelivered or foreign stop does nothing", async () => {
 	const faux = newFaux();

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Replies carry the original message text or media caption as context; selected Telegram quotes take priority.
+
 ## 0.1.7 (2026-10-21)
 
 - Fixed: a tap disables only its own button row, other questions in the same message stay answerable. A button

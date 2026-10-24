@@ -59,6 +59,7 @@ More in [docs/install.md](docs/install.md).
 - **Ask from anywhere.** "Check why the site is down", "what is eating the disk". The agent works on the server and
   answers in the chat.
 - **Send it things.** A photo of an error, a PDF, a voice note. It reads, looks and listens, and sends files back.
+- Reply to a message to give the agent its text or caption as context; a selected quote takes priority.
 - **Walk away.** Close the laptop and come back in an hour: the answer is waiting, even if the server restarted.
 - **Read it easily.** Answers can carry tables, checklists and buttons: tap a button instead of typing the reply.
   While the agent types, a stop button sits under its answer.

@@ -120,6 +120,7 @@ const SKIPPED_FIELDS: ReadonlySet<string> = new Set([
 	"entities",
 	"forward_origin",
 	"reply_to_message",
+	"quote",
 	"edit_date",
 	"has_protected_content",
 	"is_automatic_forward",
