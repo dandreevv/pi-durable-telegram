@@ -29,6 +29,7 @@ import { admit, type DuplicateReason, knownAs } from "./intake.ts";
 import { forwardMarker } from "./provenance.ts";
 import { type ChannelRuntime, type MessageScope, reply } from "./scope.ts";
 import { handleTap } from "./tap.ts";
+import { rememberTopicName } from "./topic-names.ts";
 
 const MB = 1024 * 1024;
 
@@ -59,7 +60,7 @@ async function route(rt: ChannelRuntime, update: Update): Promise<void> {
 		return stopFromDraft(rt, access.chatId, draft.draft_id, update.update_id);
 	}
 	const message = update.message as Message;
-	if (isTopicServiceOnly(message)) return;
+	if (isTopicServiceOnly(message)) return rememberTopicName(rt.harness, message, BG);
 	const scope = await scopeFor(rt, message, update.update_id);
 	const reason = await knownAs(rt.harness, scope.conversation, scope.key, update.update_id, BG);
 	if (reason !== undefined) return logDuplicate(scope, reason);

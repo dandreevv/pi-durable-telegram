@@ -31,6 +31,7 @@ export class FakeTelegram implements TelegramPort {
 	readonly files = new Map<string, Uint8Array>();
 	/** Draft frames shown, in order, per chat. */
 	readonly drafts: { chatId: number; threadId?: number; draftId: number; markdown: string }[] = [];
+	readonly renamedTopics: { chatId: number; threadId: number; name: string }[] = [];
 	readonly answeredQueries: string[] = [];
 	commands: readonly BotCommandSpec[] = [];
 	#nextId = 1000;
@@ -109,6 +110,11 @@ export class FakeTelegram implements TelegramPort {
 			signal,
 		);
 		this.drafts.push({ chatId, draftId, markdown, ...threadExtra(threadId) });
+	}
+
+	async renameTopic(chatId: number, threadId: number, name: string, signal?: AbortSignal): Promise<void> {
+		await this.#enter({ method: "renameTopic", chatId, threadId, text: name }, signal);
+		this.renamedTopics.push({ chatId, threadId, name });
 	}
 
 	async answerCallbackQuery(queryId: string): Promise<void> {

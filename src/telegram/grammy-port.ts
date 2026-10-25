@@ -45,6 +45,18 @@ export function createGrammyPort(options: GrammyPortOptions): TelegramPort {
 					gs(signal),
 				);
 			}),
+		renameTopic: (chatId, threadId, name, signal) =>
+			guard("editForumTopic", async () => {
+				await api.editForumTopic(chatId, threadId, { name }, gs(signal));
+			}).catch((error: unknown) => {
+				if (
+					error instanceof TelegramApiError &&
+					error.code === 400 &&
+					/^(?:Bad Request:\s*)?TOPIC_NOT_MODIFIED$/i.test(error.description)
+				)
+					return;
+				throw error;
+			}),
 		sendDraft: (chatId, draftId, markdown, signal, threadId) =>
 			guard("sendRichMessageDraft", async () => {
 				await fast.sendRichMessageDraft(

@@ -23,6 +23,16 @@ export function chatKey(chatId: number, threadId?: number): string {
 	return threadId !== undefined && threadId > 0 ? `${chatId}:${threadId}` : String(chatId);
 }
 
+export type TopicName = { name: string; implicit: boolean; attempted?: boolean };
+
+/** Observed topic names survive context resets and are shared with helpers through the chat/topic key. */
+export const TopicNames = defineDoc<{ topics: Record<string, TopicName> }>({
+	kind: "tg.topic-names",
+	version: 1,
+	scope: "session",
+	initial: () => ({ topics: {} }),
+});
+
 /**
  * Ring of recently admitted Telegram message keys (`tg:<chat>:<message>:<date>`) and update markers (`u:<update>`):
  * redelivered updates are dropped. Keys of earlier versions (`tg:<chat>:<message>`) stay until they age out; no new

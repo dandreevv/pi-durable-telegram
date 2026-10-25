@@ -81,6 +81,11 @@ curl -fsSL https://raw.githubusercontent.com/smixs/pi-durable-telegram/main/inst
 Команды `/new`, `/stop`, `/compact` и `/status` действуют только в той теме, где ты их отправляешь.
 История обычного чата без темы сохраняется.
 
+Новая тема со стандартным названием Telegram получит короткое имя от агента, когда станет понятна задача.
+Можно и просто попросить переименовать текущую тему. Названия, которые ты задал сам, сохраняются;
+`TELEGRAM_TOPIC_NAMES=manual` отключает автоименование. Старые темы с неизвестным боту названием он переименовывает
+только по просьбе.
+
 Рабочий каталог и права на сервере у тем общие. Для задач, которые меняют один проект, используй отдельные рабочие
 копии: разные контексты не изолируют файлы.
 
@@ -201,8 +206,8 @@ curl -fsSL https://raw.githubusercontent.com/smixs/pi-durable-telegram/main/inst
 **Что это такое, точно**
 
 Демон на [pi-durable](https://github.com/earendil-works/pi/tree/main/packages/durable) (`@earendil-works/pi-durable`),
-который сам опрашивает Telegram Bot API. Один durable-разговор на каждый разрешённый личный чат, хранится в SQLite.
-Инструменты: `bash`, `read`, `write`, `edit` и `telegram_send_file`. Использует вход pi и работает службой systemd
+который сам опрашивает Telegram Bot API. Один durable-разговор на каждую тему разрешённого личного чата, хранится в SQLite.
+Инструменты: `bash`, `read`, `write`, `edit`, `telegram_send_file` и `telegram_rename_topic`. Использует вход pi и работает службой systemd
 пользователя на Linux с Node.js 22.19 или новее.
 
 **Почему его выбирают вместо других вариантов**

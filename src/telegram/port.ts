@@ -28,6 +28,8 @@ export interface TelegramPort {
 		options: SendOptions,
 		signal?: AbortSignal,
 	): Promise<void>;
+	/** Rename this topic; optional for transports that do not support topic management. */
+	renameTopic?(chatId: number, threadId: number, name: string, signal?: AbortSignal): Promise<void>;
 	/** Show or update the ephemeral rich draft `draftId` (private chats), with a stop button. */
 	sendDraft(chatId: number, draftId: number, markdown: string, signal?: AbortSignal, threadId?: number): Promise<void>;
 	/** Stop the loading state of a tapped inline button. */

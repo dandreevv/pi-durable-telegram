@@ -40,6 +40,11 @@ edited about once per second) and is then sent as a rich message.
   chat. Context, queues, commands, drafts, files, buttons and reminders stay in their topic. Different topics can run
   at the same time. Existing topic-less chat history is kept. All topics share `PI_WORKDIR` and the service user's
   permissions; use separate working copies for concurrent edits to the same project.
+- **Topic names.** With `TELEGRAM_TOPIC_NAMES=auto` (the default), the agent names a new topic once its task is clear,
+  using `telegram_rename_topic` during the normal answer. Only names observed as implicit in Telegram's creation
+  event qualify; manual names and older topics with unknown names are kept. Ask the agent to rename any topic
+  explicitly, or set `TELEGRAM_TOPIC_NAMES=manual` to disable automatic naming. An interrupted or failed automatic
+  rename is not repeated after a restart; check the visible title before retrying it yourself.
 - **Commands.** `/new`, `/stop`, `/compact`, `/status`, `/help`. `/new` drops what was still waiting for an answer
   and says so: its reply names the stopped run and the first words of each dropped message.
 - **Anything you send reaches the agent.** Photos, documents, videos, animations and stickers (up to 20 MB, the Bot

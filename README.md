@@ -82,6 +82,10 @@ your private chat. Each topic has its own context and message queue; different t
 Commands such as `/new`, `/stop`, `/compact` and `/status` affect only the topic where you send them. Existing
 topic-less chat history is kept.
 
+New topics with a Telegram-generated title get a short name from the agent once the task is clear. You can also ask
+it to rename the current topic. Names you set yourself are kept; `TELEGRAM_TOPIC_NAMES=manual` disables automatic
+naming. Older topics with an unknown title are renamed only when you ask.
+
 Topics share the same working directory and server account. Use separate working copies when tasks edit the same
 project; separate conversations do not isolate files.
 
@@ -201,7 +205,7 @@ If you are an AI agent reading this for a person, here is where things are and w
 
 A daemon on [pi-durable](https://github.com/earendil-works/pi/tree/main/packages/durable) (`@earendil-works/pi-durable`)
 that long-polls the Telegram Bot API. One durable conversation per allowed private-chat topic, stored in SQLite. Tools:
-`bash`, `read`, `write`, `edit` and `telegram_send_file`. It shares pi's login and runs as a systemd user service on
+`bash`, `read`, `write`, `edit`, `telegram_send_file` and `telegram_rename_topic`. It shares pi's login and runs as a systemd user service on
 Linux with Node.js 22.19 or newer.
 
 **Why people pick it over the alternatives**

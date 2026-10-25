@@ -91,7 +91,7 @@ away.
 ## Helpers: `helpers`
 
 Gives the agent a `helper` tool: it hands a self-contained task to a helper agent and gets the helper's final answer
-back as the tool result. A helper has the same tools as the main agent (bash, files, `telegram_send_file`, search,
+back as the tool result. A helper has the same tools as the main agent (bash, files, Telegram, search,
 MCP, reminders), except `helper` itself, so helpers cannot start helpers. A helper does not see the chat: the task
 text is all it knows. Several helper calls in one answer run at the same time.
 
@@ -104,6 +104,7 @@ text is all it knows. Several helper calls in one answer run at the same time.
 - A bad `PI_HELPER_MODEL` or `PI_HELPER_THINKING` is reported as a plugin problem; helpers then use the main model.
 - `/stop` and the stop button of a draft stop the helpers together with the answer.
 - After a restart a running helper goes on in the same helper conversation, and its task is not sent to it again.
+- Helpers can rename their originating topic on request, but do not automatically name it from a delegated task.
   The limit is counted in memory per running service.
 - Helper spend is in the "All chats" line of `/status`, not in "This chat".
 
@@ -170,8 +171,9 @@ The context:
 Rules:
 
 - `parameters` is a JSON Schema object. A thrown error becomes an error result the model reads.
-- Tool and extension names must not repeat the core ones (`read`, `write`, `edit`, `bash`, `telegram_send_file`) or
-  another plugin's; such a plugin is not loaded. The same goes for section keys (core: `preamble`, `agents_md`).
+- Tool and extension names must not repeat the core ones (`read`, `write`, `edit`, `bash`, `telegram_send_file`,
+  `telegram_rename_topic`) or another plugin's; such a plugin is not loaded. The same goes for section keys
+  (core: `preamble`, `agents_md`, `telegram_topic`).
   A section key is lowercase letters, digits, `-` and `_`, starting with a letter. To change a core tool or section on
   purpose, use pi-durable's `wraps`.
 - A tool is not rerun after a restart unless it says `replay: "safe"`; set that only for tools that are safe to repeat.
