@@ -99,7 +99,7 @@ text is all it knows. Several helper calls in one answer run at the same time.
 |---|---|---|
 | `PI_HELPER_MODEL` | the main model | `provider/model` for helpers, with the ids you would put in `PI_PROVIDER` and `PI_MODEL`. Another provider needs its own `login`. |
 | `PI_HELPER_THINKING` | the main level; `off` with `PI_HELPER_MODEL` | thinking level of helpers |
-| `PI_HELPERS_MAX` | 4 | helper calls running at once per chat; a call over the limit comes back to the model as an error asking it to wait for the running ones |
+| `PI_HELPERS_MAX` | 4 | helper calls running at once per topic; a call over the limit comes back to the model as an error asking it to wait for the running ones |
 
 - A bad `PI_HELPER_MODEL` or `PI_HELPER_THINKING` is reported as a plugin problem; helpers then use the main model.
 - `/stop` and the stop button of a draft stop the helpers together with the answer.
@@ -121,11 +121,12 @@ with ids and next times) and `cancel` (by id). When a reminder comes due, the ag
 - A repeating reminder keeps its local time across daylight saving changes. A time skipped by the clock change is
   refused for `add`; a repeat that falls into it moves past it that day. A daily, weekday or weekly reminder fires at
   most once per local date, also on the day the clock goes back.
-- At most 100 pending reminders per chat, at most 366 days ahead. `cancel` ends the reminder at once.
+- At most 100 pending reminders per topic, at most 366 days ahead. `cancel` ends the reminder at once.
 - Reminders are stored durably. After a restart they wait again; one missed while the service was down fires once
   after start, marked late; a repeating one fires once and then goes on from its next time, it does not catch up every
   missed time. Each due time wakes the agent at most once, even across restarts.
-- `/new` keeps reminders. A reminder set by a helper goes to the main chat.
+- `/new` keeps reminders. A reminder set by a helper belongs to its originating topic's main conversation and wakes
+  that topic. Each topic lists and cancels its own reminders.
 - With `reminders` removed from `PI_PLUGINS`, a pending reminder is dropped at its due time without waking the agent
   (the log says `reminder … dropped`). The service always starts. The same happens to a reminder of a user taken off
   `TELEGRAM_ALLOWED_USER_IDS`: it never wakes the agent or reaches that chat again.

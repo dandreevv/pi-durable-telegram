@@ -1,6 +1,6 @@
 import { defineDoc } from "@earendil-works/pi-durable";
 
-/** Telegram chat id → durable conversation id; one conversation per allowed private chat. */
+/** Telegram chat/topic key → durable conversation id; old chat-only keys keep their original history. */
 export const ChatMap = defineDoc<{ chats: Record<string, number> }>({
 	kind: "tg.chats",
 	version: 1,
@@ -9,7 +9,7 @@ export const ChatMap = defineDoc<{ chats: Record<string, number> }>({
 });
 
 /** The Telegram chat a conversation belongs to, so tools and tasks find it from `conversationId`. */
-export const ChatInfo = defineDoc<{ chatId: number }>({
+export const ChatInfo = defineDoc<{ chatId: number; threadId?: number }>({
 	kind: "tg.chat",
 	version: 1,
 	scope: "conversation",
@@ -17,6 +17,11 @@ export const ChatInfo = defineDoc<{ chatId: number }>({
 	fork: "initial",
 	initial: () => ({ chatId: 0 }),
 });
+
+/** General chat keeps its existing key; every positive topic id gets an independent conversation. */
+export function chatKey(chatId: number, threadId?: number): string {
+	return threadId !== undefined && threadId > 0 ? `${chatId}:${threadId}` : String(chatId);
+}
 
 /**
  * Ring of recently admitted Telegram message keys (`tg:<chat>:<message>:<date>`) and update markers (`u:<update>`):

@@ -75,6 +75,16 @@ More in [docs/install.md](docs/install.md).
 | `/status` | show the AI model in use, how full the memory is and what it has cost |
 | `/help` | show this list |
 
+## Parallel tasks
+
+Enable **Threaded Mode** for your bot in [@BotFather](https://t.me/BotFather), then create a topic for each task in
+your private chat. Each topic has its own context and message queue; different topics can work at the same time.
+Commands such as `/new`, `/stop`, `/compact` and `/status` affect only the topic where you send them. Existing
+topic-less chat history is kept.
+
+Topics share the same working directory and server account. Use separate working copies when tasks edit the same
+project; separate conversations do not isolate files.
+
 ## More
 
 <details>
@@ -148,7 +158,7 @@ Yes. Add their Telegram ids to the settings and each person gets a private conve
 same power over the server.
 
 **Does it work in group chats?**
-Not yet, only in private chats.
+Not yet, only in private chats, including topics.
 
 **Does it understand voice messages?**
 Yes, if you add a [Deepgram](https://deepgram.com) key during installation.
@@ -190,7 +200,7 @@ If you are an AI agent reading this for a person, here is where things are and w
 **What it is, precisely**
 
 A daemon on [pi-durable](https://github.com/earendil-works/pi/tree/main/packages/durable) (`@earendil-works/pi-durable`)
-that long-polls the Telegram Bot API. One durable conversation per allowed private chat, stored in SQLite. Tools:
+that long-polls the Telegram Bot API. One durable conversation per allowed private-chat topic, stored in SQLite. Tools:
 `bash`, `read`, `write`, `edit` and `telegram_send_file`. It shares pi's login and runs as a systemd user service on
 Linux with Node.js 22.19 or newer.
 
