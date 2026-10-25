@@ -104,8 +104,8 @@ text is all it knows. Several helper calls in one answer run at the same time.
 - A bad `PI_HELPER_MODEL` or `PI_HELPER_THINKING` is reported as a plugin problem; helpers then use the main model.
 - `/stop` and the stop button of a draft stop the helpers together with the answer.
 - After a restart a running helper goes on in the same helper conversation, and its task is not sent to it again.
+- The `PI_HELPERS_MAX` limit is tracked per topic in the running service's memory.
 - Helpers can rename their originating topic on request, but do not automatically name it from a delegated task.
-  The limit is counted in memory per running service.
 - Helper spend is in the "All chats" line of `/status`, not in "This chat".
 
 ## Reminders: `reminders`
